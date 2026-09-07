@@ -33,7 +33,7 @@ class Command(BaseCommand):
             admin_role = Role.objects.get(name='Administrator')
         except Role.DoesNotExist:
             self.stdout.write(self.style.ERROR(
-                'No "Administrator" Role found — did the seed_roles migration (0008) run? Run `python manage.py migrate` first.'
+                'No "Administrator" Role found — did the seed_roles migration (0008) run? Run python manage.py migrate first.'
             ))
             return
 

@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.conf import settings
 from django.db.models import Sum
@@ -180,6 +181,11 @@ class Invoice(models.Model):
     createdAt = models.DateTimeField(auto_now_add=True)
     updatedAt = models.DateTimeField(auto_now=True)
 
+    # Phase 1: unauthenticated bidders use this token to view their invoice
+    # and upload a payment receipt without logging in. Never expires unless
+    # we decide otherwise later.
+    publicToken = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
     @property
     def totalAmount(self):
         return self.lots.aggregate(total=Sum('lotFee'))['total'] or Decimal('0.00')
@@ -206,6 +212,11 @@ class InvoiceLot(models.Model):
     lotFee = models.DecimalField(max_digits=15, decimal_places=2, editable=False)
     submittedAt = models.DateTimeField(null=True, blank=True)
 
+    # Phase 0: any column in the uploaded sheet that isn't one of the
+    # REQUIRED_COLUMNS gets captured here automatically as {columnName: value}.
+    # Lets a company add new spreadsheet columns without a code/migration change.
+    extraFields = models.JSONField(default=dict, blank=True)
+
     def save(self, *args, **kwargs):
         self.lotFee = (self.winningAmount * self.feePercentage / Decimal('100')).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
@@ -216,11 +227,21 @@ class InvoiceLot(models.Model):
 
 class Payment(models.Model):
     """
-    A record of a payment CLAIM against an invoice — entered manually by
-    Finance after checking the bank/Telebirr statement themselves. Nothing
-    here talks to CBE or Telebirr. paymentStatus is Payment's own
-    pending/verified/rejected flag; it's separate from Invoice.status,
-    which only Finance/Admin move via the transition rules.
+    A record of a payment CLAIM against an invoice. Two ways a Payment gets
+    created:
+      1. Staff enters it manually after checking the bank/Telebirr statement
+         themselves (existing flow — paymentStatus pending/verified/rejected,
+         set by Finance).
+      2. A bidder self-submits it through the public invoice link, attaching
+         a photo/PDF of their receipt (submittedViaPublicLink=True). This
+         starts a SEPARATE review step — verificationStatus — that an
+         Auction Manager works through BEFORE it's treated as a normal
+         Payment for Finance. Kept separate from paymentStatus on purpose:
+         paymentStatus is Finance's final word; verificationStatus is the
+         manager's "is this receipt legit" checkpoint that happens first.
+         (Planned to eventually be automated — kept as its own field/step
+         specifically so that automation can slot in later without touching
+         paymentStatus or Finance's side of things at all.)
     """
     METHOD_CHOICES = [
         ('bank_transfer', 'Bank Transfer'),
@@ -232,6 +253,12 @@ class Payment(models.Model):
         ('pending', 'Pending'),
         ('verified', 'Verified'),
         ('rejected', 'Rejected'),
+    ]
+    VERIFICATION_STATUS_CHOICES = [
+        ('not_applicable', 'Not applicable'),         # staff-entered payments skip this step entirely
+        ('pending_manager_review', 'Pending Manager Review'),
+        ('manager_approved', 'Manager Approved'),
+        ('manager_rejected', 'Manager Rejected'),
     ]
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
@@ -246,6 +273,19 @@ class Payment(models.Model):
     verifiedDate = models.DateTimeField(null=True, blank=True)
     paymentStatus = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     remarks = models.TextField(blank=True)
+
+    # Phase 1 additions — the public receipt-upload + manager-review flow
+    receiptFile = models.FileField(upload_to='receipts/', null=True, blank=True)
+    submittedViaPublicLink = models.BooleanField(default=False)
+    verificationStatus = models.CharField(
+        max_length=30, choices=VERIFICATION_STATUS_CHOICES, default='not_applicable'
+    )
+    managerVerifiedBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='manager_verified_payments'
+    )
+    managerVerifiedDate = models.DateTimeField(null=True, blank=True)
+    managerNote = models.TextField(blank=True, default='')
 
     def __str__(self):
         return f"{self.amountPaid} on {self.invoice.invoiceNumber}"
@@ -330,6 +370,3 @@ class GeneratedReport(models.Model):
 
     def __str__(self):
         return f"{self.title} — {self.generatedAt:%Y-%m-%d %H:%M}"
-
-
-

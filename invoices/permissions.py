@@ -8,6 +8,7 @@ ROLE_PERMISSIONS = {
     'generate_invoice':      ['administrator', 'auction_manager'],   # her PDF_ROLES
     'upload_payment_proof':  ['administrator', 'auction_manager'],   # her "Upload receipt" button
     'verify_payment':        ['administrator', 'finance_manager'],
+    'manager_verify_receipt': ['administrator', 'auction_manager'],  # reviewing bidder-submitted receipts, Phase 1
     'reject_payment':        ['administrator', 'finance_manager'],
     'mark_paid':              ['administrator', 'finance_manager'],
     'mark_overdue':           ['administrator', 'finance_manager'],  # manual override; automated version is the management command

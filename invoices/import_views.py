@@ -16,7 +16,6 @@ from .models import ImportBatch, Winner, Invoice, InvoiceLot, FeeConfig
 from .serializers import ImportBatchSerializer, InvoiceListSerializer
 from .permissions import has_permission
 
-# Replace "from .views import StandardPagination" with:
 from .pagination import StandardPagination
 
 
@@ -27,17 +26,11 @@ REQUIRED_COLUMNS = [
 
 
 def parse_submitted_at(raw):
-    """
-    bid_data_report.xlsx's 'Submitted At' column looks like
-    'Nov. 20, 2025, 1:13 p.m.' — not ISO, and %b/%p in strptime don't
-    accept the periods after the month or in "p.m." directly, so this
-    normalizes those before parsing.
-    """
     if raw in (None, ''):
         return None
     text = str(raw).strip()
-    text = re.sub(r'^([A-Za-z]{3})\.', r'\1', text)                       # "Nov." -> "Nov"
-    text = re.sub(r'([ap])\.m\.$', lambda m: m.group(1).upper() + 'M',    # "p.m." -> "PM"
+    text = re.sub(r'^([A-Za-z]{3})\.', r'\1', text)
+    text = re.sub(r'([ap])\.m\.$', lambda m: m.group(1).upper() + 'M',
                   text, flags=re.IGNORECASE)
     try:
         dt = datetime.strptime(text, '%b %d, %Y, %I:%M %p')
@@ -57,11 +50,29 @@ def to_decimal(value):
         return None
 
 
+def _jsonable(value):
+    """
+    Extra columns can contain anything openpyxl hands back — datetimes,
+    Decimals, etc. — none of which are JSON-serializable as-is. Normalize
+    everything to a plain string (or None) for extraFields, since it's
+    display-only in v1 anyway (see Phase 0 decision).
+    """
+    if value is None:
+        return None
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    return value
+
+
 def parse_bid_report(file_obj):
     """
     Reads the header row to map column name -> position, so column order
-    in the file doesn't matter as long as the names match. Returns
-    (rows, error_message).
+    in the file doesn't matter as long as the names match. Any column
+    NOT in REQUIRED_COLUMNS is captured per-row into an 'extraFields'
+    dict instead of being silently dropped (Phase 0).
+    Returns (rows, error_message).
     """
     wb = openpyxl.load_workbook(file_obj, data_only=True)
     sheet = wb.active
@@ -73,10 +84,25 @@ def parse_bid_report(file_obj):
 
     idx = {name: header_row.index(name) for name in REQUIRED_COLUMNS}
 
+    # Any header cell that isn't blank and isn't one of the required
+    # columns is an "extra" column — captured per-row below.
+    extra_col_names = [
+        name for name in header_row
+        if name not in (None, '') and name not in REQUIRED_COLUMNS
+    ]
+    extra_idx = {name: header_row.index(name) for name in extra_col_names}
+
     rows = []
     for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
         if row[idx['Name']] is None and row[idx['Phone number']] is None:
             continue  # skip fully blank trailing rows
+
+        extra_fields = {
+            name: _jsonable(row[col_idx])
+            for name, col_idx in extra_idx.items()
+            if row[col_idx] not in (None, '')
+        }
+
         rows.append({
             'rowNumber': row_number,
             'lotNumber': row[idx['Lot No']],
@@ -89,18 +115,12 @@ def parse_bid_report(file_obj):
             'cpoAmount': row[idx['CPO Amount']],
             'cpoBank': row[idx['CPO Bank']],
             'status': row[idx['Status']],
+            'extraFields': extra_fields,
         })
     return rows, None
 
 
 class ImportBatchPreviewView(APIView):
-    """
-    POST /api/import-batches/preview/ — parses the file, groups Winner rows
-    by phone number, computes default fees. Saves NOTHING — matches the
-    frontend's "Preview — nothing saved yet" screen. Staff review/edit fee
-    percentages client-side; confirm/ creates records from that (possibly
-    edited) grouped data, not by re-parsing the file a second time.
-    """
     parser_classes = [MultiPartParser]
     permission_classes = [IsAuthenticated]
 
@@ -125,7 +145,7 @@ class ImportBatchPreviewView(APIView):
 
         for row in rows:
             if row['status'] != 'Winner':
-                continue  # Submitted rows are dropped entirely, per the import rules
+                continue
 
             issues = []
             phone = row['winnerPhone']
@@ -155,6 +175,7 @@ class ImportBatchPreviewView(APIView):
                 'feePercentage': str(default_fee_pct),
                 'lotFee': str(lot_fee),
                 'submittedAt': row['submittedAt'].isoformat() if hasattr(row['submittedAt'], 'isoformat') else row['submittedAt'],
+                'extraFields': row.get('extraFields', {}),
             }
 
             if phone not in groups:
@@ -181,27 +202,10 @@ class ImportBatchPreviewView(APIView):
 
 
 class ImportBatchConfirmView(APIView):
-    """
-    POST /api/import-batches/confirm/ — creates ImportBatch + Winner +
-    Invoice + InvoiceLot records from the grouped data the preview screen
-    returned (with whatever fee% edits staff made in the browser).
-
-    DESIGN DECISION worth knowing: Winner has single winningAmount/
-    initialPrice/cpoAmount fields, but one winner can win several lots.
-    Resolved by making each Winner record represent that bidder's TOTAL
-    across all their lots in this one batch (sums), while every
-    individual lot's own numbers live on InvoiceLot, which is already
-    fully itemized per lot. This is what keeps Invoice.winner a single
-    clean ForeignKey instead of needing a many-to-many relationship —
-    this wasn't explicit anywhere in the original model spec, so flagging
-    it here rather than leaving it implicit in the code.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not has_permission(request.user, 'generate_invoice'):
-            # Confirming an import creates invoices — same permission bar
-            # as generating one PDF (admin + auction_manager).
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
         file_name = request.data.get('fileName', '')
@@ -210,10 +214,7 @@ class ImportBatchConfirmView(APIView):
         batch_name = request.data.get('batchName', '')
         grouped_winners = request.data.get('groupedWinners', [])
         invalid_records = int(request.data.get('invalidRecords', 0) or 0)
-        # Optional: how many days out the due date defaults to. 14 is a
-        # placeholder — swap for whatever finance's actual payment terms
-        # are, or accept it per-batch from the request if it varies.
-        due_date_input = request.data.get('dueDate')  # e.g. "2026-09-03", from the preview screen
+        due_date_input = request.data.get('dueDate')
         due_in_days = int(request.data.get('dueInDays', 14))
         invoice_due_date = due_date_input or (timezone.localdate() + timedelta(days=due_in_days))
 
@@ -282,7 +283,7 @@ class ImportBatchConfirmView(APIView):
                         cpoBank=lot.get('cpoBank', ''),
                         feePercentage=Decimal(raw_fee_pct),
                         submittedAt=parse_submitted_at(lot.get('submittedAt')),
-                        # lotFee isn't passed — InvoiceLot.save() computes it.
+                        extraFields=lot.get('extraFields') or {},
                     )
                 created_invoice_ids.append(invoice.id)
 
@@ -293,15 +294,12 @@ class ImportBatchConfirmView(APIView):
 
     @staticmethod
     def _next_invoice_number():
-        # Simple incrementing scheme: INV-<year>-<seq>. Fine at this scale;
-        # swap to select_for_update() if concurrent imports ever race.
         year = timezone.localdate().year
         count = Invoice.objects.filter(invoiceNumber__startswith=f'INV-{year}-').count()
         return f'INV-{year}-{count + 1:03d}'
 
 
 class ImportBatchViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):
-    """GET /api/import-batches/ and /api/import-batches/{id}/ — read-only, confirm/ is what creates them."""
     queryset = ImportBatch.objects.select_related('importedBy').order_by('-uploadDate')
     serializer_class = ImportBatchSerializer
     permission_classes = [IsAuthenticated]
@@ -316,13 +314,12 @@ class ImportBatchViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
-    
+
     def perform_destroy(self, instance):
         if not has_permission(self.request.user, 'delete_records'):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only administrators can delete import batches.')
         with transaction.atomic():
-            # Invoice.delete() cascades to InvoiceLot/Payment/Attachment/AuditLog already
             Invoice.objects.filter(importBatch=instance).delete()
             Winner.objects.filter(importBatch=instance).delete()
             instance.delete()
