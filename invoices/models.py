@@ -9,7 +9,7 @@ class Role(models.Model):
     """
     Database-backed role. Built-in rows (Administrator, Auction Manager,
     Finance Manager, CRM/Call Center Officer, Viewer) are seeded via data
-    migration and marked isBuiltIn=True — they can still be edited, just
+    migration and marked isBuiltIn=True - they can still be edited, just
     not deleted, to protect the 5 the frontend/permissions checks assume
     exist as sane defaults. Custom roles created via "New role" have
     isBuiltIn=False.
@@ -67,6 +67,14 @@ class ImportBatch(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='import_batches'
     )
+    columnMapping = models.JSONField(
+        default=dict, blank=True,
+        help_text="Snapshot of which original spreadsheet column supplied each "
+                   "known field for this batch, e.g. {'lotNumber': 'Lot No', "
+                   "'auctionName': 'Auction', ...}. Captured at import time so "
+                   "it stays accurate for this batch even if the alias list "
+                   "changes later."
+    )
     class Meta:
         verbose_name_plural = "Import batches"
     def __str__(self):
@@ -76,7 +84,7 @@ class ImportBatch(models.Model):
 class FeeConfig(models.Model):
     """
     Holds the default processing-fee percentage (0.95%).
-    Only one row should have is_active=True at a time — enforce that in the
+    Only one row should have is_active=True at a time - enforce that in the
     admin/serializer save logic (flip old active row off before saving new one),
     not with a DB constraint, since you want history of past configs.
     """
@@ -94,7 +102,7 @@ class FeeConfig(models.Model):
     def get_active_percentage(cls):
         active = cls.objects.filter(is_active=True).first()
         return active.percentage if active else Decimal('0.95')
-    
+
 class OfficeSettings(models.Model):
     """Reusable Amharic office address printed/attached to invoices. Same
     single-active-row + history pattern as FeeConfig."""
@@ -130,7 +138,7 @@ class Winner(models.Model):
     bidderName = models.CharField(max_length=255)
     companyName = models.CharField(max_length=200, blank=True)  # always optional, filled in manually after import
     winnerPhone = models.CharField(max_length=20)
-    winnerEmail = models.EmailField(blank=True,default='')  # dropped null=True — see note above
+    winnerEmail = models.EmailField(blank=True, default='')  # dropped null=True - see note above
     auction = models.ForeignKey(
         Auction, on_delete=models.SET_NULL, null=True, blank=True, related_name='winners'
     )
@@ -151,11 +159,11 @@ class Winner(models.Model):
 
 class Invoice(models.Model):
     """
-    One Invoice per (winner, importBatch) pair — created when staff confirms
+    One Invoice per (winner, importBatch) pair - created when staff confirms
     the import preview. feePercentage lives on InvoiceLot now, not here,
     because different lots on the same invoice can carry different negotiated
     rates. totalAmount is a computed property (sum of lots), not a stored
-    column — see explanation above.
+    column - see explanation above.
     """
     STATUS_CHOICES = [
         ('invoice_generated', 'Invoice Generated'),
@@ -177,7 +185,7 @@ class Invoice(models.Model):
     dueDate = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='invoice_generated')
     remarks = models.TextField(blank=True, default='')
-    callNotes = models.TextField(blank=True, default='', help_text="Call Center follow-up note — single mutable field, not a history log.")
+    callNotes = models.TextField(blank=True, default='', help_text="Call Center follow-up note - single mutable field, not a history log.")
     createdAt = models.DateTimeField(auto_now_add=True)
     updatedAt = models.DateTimeField(auto_now=True)
 
@@ -197,7 +205,7 @@ class Invoice(models.Model):
 class InvoiceLot(models.Model):
     """
     One row per lot won, under a single Invoice. lotFee is auto-calculated
-    on save from winningAmount * feePercentage — same idea as overriding a
+    on save from winningAmount * feePercentage - same idea as overriding a
     setter/property in C#: callers never compute lotFee themselves, save()
     does it for them so it can never drift out of sync with the inputs.
     """
@@ -222,7 +230,7 @@ class InvoiceLot(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.lotNumber} — fee {self.lotFee}"
+        return f"{self.lotNumber} - fee {self.lotFee}"
 
 
 class Payment(models.Model):
@@ -230,16 +238,16 @@ class Payment(models.Model):
     A record of a payment CLAIM against an invoice. Two ways a Payment gets
     created:
       1. Staff enters it manually after checking the bank/Telebirr statement
-         themselves (existing flow — paymentStatus pending/verified/rejected,
+         themselves (existing flow - paymentStatus pending/verified/rejected,
          set by Finance).
       2. A bidder self-submits it through the public invoice link, attaching
          a photo/PDF of their receipt (submittedViaPublicLink=True). This
-         starts a SEPARATE review step — verificationStatus — that an
+         starts a SEPARATE review step - verificationStatus - that an
          Auction Manager works through BEFORE it's treated as a normal
          Payment for Finance. Kept separate from paymentStatus on purpose:
          paymentStatus is Finance's final word; verificationStatus is the
          manager's "is this receipt legit" checkpoint that happens first.
-         (Planned to eventually be automated — kept as its own field/step
+         (Planned to eventually be automated - kept as its own field/step
          specifically so that automation can slot in later without touching
          paymentStatus or Finance's side of things at all.)
     """
@@ -248,6 +256,7 @@ class Payment(models.Model):
         ('telebirr', 'Telebirr'),
         ('cpo', 'CPO'),
         ('other', 'Other'),
+        ('unspecified', 'Unspecified'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -274,7 +283,7 @@ class Payment(models.Model):
     paymentStatus = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     remarks = models.TextField(blank=True)
 
-    # Phase 1 additions — the public receipt-upload + manager-review flow
+    # Phase 1 additions - the public receipt-upload + manager-review flow
     receiptFile = models.FileField(upload_to='receipts/', null=True, blank=True)
     submittedViaPublicLink = models.BooleanField(default=False)
     verificationStatus = models.CharField(
@@ -320,7 +329,7 @@ class Attachment(models.Model):
 class AuditLog(models.Model):
     """
     Append-only trail. Every status change, payment verification, due-date
-    extension, etc. writes one of these — you'll hook this into the views
+    extension, etc. writes one of these - you'll hook this into the views
     at step 16, not here. userRole is a snapshot string (not a live FK to
     StaffProfile) on purpose: if someone's role changes later, the log
     should still say what role they held *at the time* of the action.
@@ -349,12 +358,9 @@ class AuditLog(models.Model):
     def __str__(self):
         return f"{self.invoice.invoiceNumber}: {self.action}"
 
-# Add this class to the bottom of your existing models.py — nothing else
-# in that file changes. Then: python manage.py makemigrations && migrate
-
 class GeneratedReport(models.Model):
     """
-    One row per PDF actually generated from the Reports page — backs the
+    One row per PDF actually generated from the Reports page - backs the
     "Recently generated" list. Preview alone (screen-only) does NOT create
     one of these; only clicking "Generate PDF" does.
     """
@@ -369,4 +375,4 @@ class GeneratedReport(models.Model):
     generatedAt = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.title} — {self.generatedAt:%Y-%m-%d %H:%M}"
+        return f"{self.title} - {self.generatedAt:%Y-%m-%d %H:%M}"

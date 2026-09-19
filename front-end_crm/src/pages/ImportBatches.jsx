@@ -74,7 +74,7 @@ export default function ImportBatches({ role, token }) {
 
       if (!response.ok) {
         const err = await response.json();
-        setError(err.detail || 'Preview failed');
+        setError(err.detail || err.error || 'Preview failed');
         setLoading(false);
         return;
       }
@@ -103,6 +103,7 @@ export default function ImportBatches({ role, token }) {
           groupedWinners: preview.groupedWinners,
           invalidRecords: preview.flaggedCount || 0,
           dueDate,
+          columnMapping: preview.columnMapping || {},
         }),
       });
 

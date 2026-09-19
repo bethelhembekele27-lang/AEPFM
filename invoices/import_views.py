@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
@@ -19,23 +19,132 @@ from .permissions import has_permission
 from .pagination import StandardPagination
 
 
-REQUIRED_COLUMNS = [
-    'Lot No', 'Auction', 'Initial Price', 'Name', 'Phone number',
-    'Amount', 'Submitted At', 'CPO Amount', 'CPO Bank', 'Status',
-]
+# ---------------------------------------------------------------------------
+# Column aliasing — each internal field can be spelled several different
+# ways across partner spreadsheets. First alias found in the header row
+# wins. Add new aliases here as new naming styles show up; nothing else
+# needs to change.
+# ---------------------------------------------------------------------------
+
+FIELD_ALIASES = {
+    'lotNumber':     ['Lot No', 'Lot Number', 'Lot #', 'LotNo'],
+    'auctionName':   ['Auction', 'Auction Name'],
+    'winningAmount': ['Amount', 'End Price'],
+    'bidderName':    ['Name', 'Winner Name'],
+    'winnerPhone':   ['Phone number', 'Winner Phone'],
+
+    # Optional fields below — safe to be absent from a sheet.
+    'status':        ['Status', 'Bidder Status'],
+    'companyName':   ['Legal Name', 'Company Name'],
+    'initialPrice':  ['Initial Price', 'Starting Price'],
+    'cpoAmount':     ['CPO Amount'],
+    'cpoBank':       ['CPO Bank'],
+    'submittedAt':   ['Submitted At', 'End Date'],
+}
+
+# The 5 fields a sheet must be able to supply, one way or another, for an
+# import to proceed at all.
+REQUIRED_FIELDS = ['lotNumber', 'auctionName', 'winningAmount', 'bidderName', 'winnerPhone']
+
+# Human-readable names used in the "missing column" error — names the
+# FIELD, not the specific alias spelling, per spec.
+FIELD_LABELS = {
+    'lotNumber': 'Lot Number',
+    'auctionName': 'Auction',
+    'winningAmount': 'Amount',
+    'bidderName': 'Bidder Name',
+    'winnerPhone': 'Phone',
+}
+
+
+def _normalize_header(value):
+    """
+    Some spreadsheet templates have line breaks (Alt+Enter) or irregular
+    whitespace baked into header cells, e.g. 'Lot\nNumber' instead of
+    'Lot Number'. Collapse any whitespace run (including newlines) into
+    a single space and strip the ends, so header matching isn't broken
+    by formatting quirks in the source file.
+    """
+    if value is None:
+        return ''
+    return re.sub(r'\s+', ' ', str(value)).strip()
+
+
+def _resolve_columns(header_row):
+    """
+    header_row: list of normalized header strings (whitespace collapsed,
+    original case preserved).
+
+    Matches each field's alias list against the header row case-
+    insensitively. Returns (col_index_by_field, missing_required_fields).
+    col_index_by_field maps field_key -> column index, or None if that
+    field (only meaningful for optional fields) wasn't found at all.
+    """
+    normalized_lookup = {}
+    for i, h in enumerate(header_row):
+        if h:
+            key = h.strip().lower()
+            # First occurrence wins if a header name repeats.
+            normalized_lookup.setdefault(key, i)
+
+    col_index_by_field = {}
+    for field, aliases in FIELD_ALIASES.items():
+        found_idx = None
+        for alias in aliases:
+            key = alias.strip().lower()
+            if key in normalized_lookup:
+                found_idx = normalized_lookup[key]
+                break
+        col_index_by_field[field] = found_idx
+
+    missing_required = [f for f in REQUIRED_FIELDS if col_index_by_field.get(f) is None]
+    return col_index_by_field, missing_required
+
+
+def _build_column_mapping(col_index_by_field, header_row):
+    """
+    Snapshot of which ORIGINAL header name (as it actually appeared in
+    this file) supplied each known field, e.g. {'lotNumber': 'Lot No',
+    'companyName': None, ...}. This is what gets saved onto ImportBatch
+    at confirm time, and later shown on the invoice detail view for
+    traceability back to the source spreadsheet.
+    """
+    mapping = {}
+    for field, idx in col_index_by_field.items():
+        mapping[field] = header_row[idx] if idx is not None else None
+    return mapping
+
+
+def _get_cell(row, col_index_by_field, field, default=None):
+    idx = col_index_by_field.get(field)
+    if idx is None or idx >= len(row):
+        return default
+    return row[idx]
 
 
 def parse_submitted_at(raw):
+    """
+    Some sheets store this as a string like 'Nov. 20, 2025, 1:13 p.m.'.
+    Others (e.g. an 'End Date' column) come back from openpyxl as an
+    actual datetime.date/datetime.datetime object. Handle both.
+    """
     if raw in (None, ''):
         return None
-    text = str(raw).strip()
-    text = re.sub(r'^([A-Za-z]{3})\.', r'\1', text)
-    text = re.sub(r'([ap])\.m\.$', lambda m: m.group(1).upper() + 'M',
-                  text, flags=re.IGNORECASE)
-    try:
-        dt = datetime.strptime(text, '%b %d, %Y, %I:%M %p')
-    except ValueError:
-        return None
+
+    if isinstance(raw, datetime):
+        dt = raw
+    elif isinstance(raw, date):
+        dt = datetime(raw.year, raw.month, raw.day)
+    else:
+        text = str(raw).strip()
+        text = re.sub(r'^([A-Za-z]{3})\.', r'\1', text)
+        text = re.sub(r'([ap])\.m\.$', lambda m: m.group(1).upper() + 'M',
+                      text, flags=re.IGNORECASE)
+        try:
+            dt = datetime.strptime(text, '%b %d, %Y, %I:%M %p')
+        except ValueError:
+            return None
+
     if timezone.is_naive(dt):
         dt = timezone.make_aware(dt)
     return dt
@@ -55,7 +164,7 @@ def _jsonable(value):
     Extra columns can contain anything openpyxl hands back — datetimes,
     Decimals, etc. — none of which are JSON-serializable as-is. Normalize
     everything to a plain string (or None) for extraFields, since it's
-    display-only in v1 anyway (see Phase 0 decision).
+    display-only anyway.
     """
     if value is None:
         return None
@@ -68,56 +177,94 @@ def _jsonable(value):
 
 def parse_bid_report(file_obj):
     """
-    Reads the header row to map column name -> position, so column order
-    in the file doesn't matter as long as the names match. Any column
-    NOT in REQUIRED_COLUMNS is captured per-row into an 'extraFields'
-    dict instead of being silently dropped (Phase 0).
-    Returns (rows, error_message).
+    Reads the header row, resolves each of the required/optional fields
+    to whichever column actually carries it (via FIELD_ALIASES), and
+    returns normalized rows. Any header column that isn't claimed by a
+    known field is preserved per-row in extraFields, under its original
+    column name, so nothing from the sheet is silently dropped.
+
+    Also returns a column_mapping dict — {field_key: original_header_name
+    or None} — a snapshot of which real header supplied each field in
+    THIS file, for traceability. Callers persist this onto ImportBatch
+    at confirm time.
+
+    Winner-row detection: if a status-like column is present and has more
+    than one distinct non-empty value in the sheet, a row is a winner
+    when that value contains "winner" (case-insensitive). Otherwise
+    (no status column, or a constant status column), a row is a winner
+    simply if it has a non-empty bidder name.
+
+    Returns (rows, column_mapping, error_message). On error, rows and
+    column_mapping are both None.
     """
     wb = openpyxl.load_workbook(file_obj, data_only=True)
     sheet = wb.active
-    header_row = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    raw_header_row = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    header_row = [_normalize_header(h) for h in raw_header_row]
 
-    missing = [c for c in REQUIRED_COLUMNS if c not in header_row]
-    if missing:
-        return None, f"Missing expected column(s): {', '.join(missing)}"
+    col_index_by_field, missing_required = _resolve_columns(header_row)
+    if missing_required:
+        missing_labels = [FIELD_LABELS[f] for f in missing_required]
+        return None, None, f"Missing required column(s): {', '.join(missing_labels)}"
 
-    idx = {name: header_row.index(name) for name in REQUIRED_COLUMNS}
+    column_mapping = _build_column_mapping(col_index_by_field, header_row)
 
-    # Any header cell that isn't blank and isn't one of the required
-    # columns is an "extra" column — captured per-row below.
-    extra_col_names = [
-        name for name in header_row
-        if name not in (None, '') and name not in REQUIRED_COLUMNS
-    ]
-    extra_idx = {name: header_row.index(name) for name in extra_col_names}
+    claimed_indices = {idx for idx in col_index_by_field.values() if idx is not None}
+    extra_columns = {
+        header_row[i]: i
+        for i in range(len(header_row))
+        if i not in claimed_indices and header_row[i]
+    }
 
     rows = []
     for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-        if row[idx['Name']] is None and row[idx['Phone number']] is None:
+        bidder_name = _get_cell(row, col_index_by_field, 'bidderName')
+        phone = _get_cell(row, col_index_by_field, 'winnerPhone')
+
+        bidder_blank = bidder_name is None or str(bidder_name).strip() == ''
+        phone_blank = phone is None or str(phone).strip() == ''
+        if bidder_blank and phone_blank:
             continue  # skip fully blank trailing rows
 
         extra_fields = {
-            name: _jsonable(row[col_idx])
-            for name, col_idx in extra_idx.items()
-            if row[col_idx] not in (None, '')
+            name: _jsonable(row[idx]) if idx < len(row) else None
+            for name, idx in extra_columns.items()
+            if idx < len(row) and row[idx] not in (None, '')
         }
 
         rows.append({
             'rowNumber': row_number,
-            'lotNumber': row[idx['Lot No']],
-            'auctionName': row[idx['Auction']],
-            'initialPrice': row[idx['Initial Price']],
-            'bidderName': row[idx['Name']],
-            'winnerPhone': row[idx['Phone number']],
-            'winningAmount': row[idx['Amount']],
-            'submittedAt': row[idx['Submitted At']],
-            'cpoAmount': row[idx['CPO Amount']],
-            'cpoBank': row[idx['CPO Bank']],
-            'status': row[idx['Status']],
+            'lotNumber': _get_cell(row, col_index_by_field, 'lotNumber'),
+            'auctionName': _get_cell(row, col_index_by_field, 'auctionName'),
+            'initialPrice': _get_cell(row, col_index_by_field, 'initialPrice'),
+            'bidderName': bidder_name,
+            'companyName': _get_cell(row, col_index_by_field, 'companyName') or '',
+            'winnerPhone': phone,
+            'winningAmount': _get_cell(row, col_index_by_field, 'winningAmount'),
+            'submittedAt': _get_cell(row, col_index_by_field, 'submittedAt'),
+            'cpoAmount': _get_cell(row, col_index_by_field, 'cpoAmount'),
+            'cpoBank': _get_cell(row, col_index_by_field, 'cpoBank') or '',
+            '_status': _get_cell(row, col_index_by_field, 'status'),
             'extraFields': extra_fields,
         })
-    return rows, None
+
+    # Decide winner-detection mode once, based on the whole sheet.
+    distinct_statuses = {
+        str(r['_status']).strip()
+        for r in rows
+        if r['_status'] not in (None, '') and str(r['_status']).strip() != ''
+    }
+    use_status_filter = len(distinct_statuses) > 1
+
+    for r in rows:
+        if use_status_filter:
+            v = r['_status']
+            r['isWinner'] = bool(v) and 'winner' in str(v).strip().lower()
+        else:
+            r['isWinner'] = bool(r['bidderName'] and str(r['bidderName']).strip())
+        del r['_status']
+
+    return rows, column_mapping, None
 
 
 class ImportBatchPreviewView(APIView):
@@ -134,7 +281,7 @@ class ImportBatchPreviewView(APIView):
         if not company_name or not auction_date:
             return Response({'error': 'companyName and auctionDate are required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        rows, header_error = parse_bid_report(file_obj)
+        rows, column_mapping, header_error = parse_bid_report(file_obj)
         if header_error:
             return Response({'error': header_error}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -144,7 +291,7 @@ class ImportBatchPreviewView(APIView):
         valid_lot_count = 0
 
         for row in rows:
-            if row['status'] != 'Winner':
+            if not row.get('isWinner'):
                 continue
 
             issues = []
@@ -182,7 +329,7 @@ class ImportBatchPreviewView(APIView):
                 groups[phone] = {
                     'bidderName': name,
                     'winnerPhone': phone,
-                    'companyName': '',
+                    'companyName': row.get('companyName') or '',
                     'feePercentage': str(default_fee_pct),
                     'lots': [],
                 }
@@ -198,6 +345,7 @@ class ImportBatchPreviewView(APIView):
             'totalWinners': len(groups),
             'totalLots': valid_lot_count,
             'flaggedCount': len(flagged_rows),
+            'columnMapping': column_mapping,
         })
 
 
@@ -218,6 +366,10 @@ class ImportBatchConfirmView(APIView):
         due_in_days = int(request.data.get('dueInDays', 14))
         invoice_due_date = due_date_input or (timezone.localdate() + timedelta(days=due_in_days))
 
+        column_mapping = request.data.get('columnMapping')
+        if not isinstance(column_mapping, dict):
+            column_mapping = {}
+
         if not company_name or not auction_date:
             return Response({'error': 'companyName and auctionDate are required'}, status=status.HTTP_400_BAD_REQUEST)
         if not grouped_winners:
@@ -235,6 +387,7 @@ class ImportBatchConfirmView(APIView):
                 validRecords=total_lots,
                 invalidRecords=invalid_records,
                 importedBy=request.user,
+                columnMapping=column_mapping,
             )
 
             created_invoice_ids = []

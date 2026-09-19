@@ -4,12 +4,37 @@ import Stamp from "./Stamp";
 import { ActionBtn } from "./ActionButton";
 import GeneratePdfModal from "./GeneratePdfModal";
 
+const FIELD_SOURCE_DEFS = [
+  { key: "lotNumber", label: "Lot Number" },
+  { key: "auctionName", label: "Auction" },
+  { key: "winningAmount", label: "Amount" },
+  { key: "bidderName", label: "Bidder Name" },
+  { key: "winnerPhone", label: "Phone" },
+  { key: "status", label: "Status" },
+  { key: "companyName", label: "Company / Legal Name" },
+  { key: "initialPrice", label: "Initial Price" },
+  { key: "cpoAmount", label: "CPO Amount" },
+  { key: "cpoBank", label: "CPO Bank" },
+  { key: "submittedAt", label: "Submitted / Received Date" },
+];
+
 export default function InvoiceDetailModal({ invoice, role, onClose, onGeneratePdf }) {
   const [showGenerate, setShowGenerate] = useState(false);
   if (!invoice) return null;
   const locked = LOCKED_STATUSES.includes(invoice.status);
   const canGeneratePdf = PDF_ROLES.includes(role) && !LOCKED_STATUSES.includes(invoice.status);
   const otherActions = actionDefsFor(invoice).filter((b) => b.label !== "Generate invoice PDF");
+
+  const extraDataRows = (invoice.lots || []).flatMap((l) =>
+    Object.entries(l.extraFields || {}).map(([key, value]) => ({
+      lotNumber: l.lotNumber,
+      key,
+      value,
+    }))
+  );
+
+  const columnMapping = invoice.columnMapping;
+
   return (
     <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
@@ -55,6 +80,56 @@ export default function InvoiceDetailModal({ invoice, role, onClose, onGenerateP
               </tbody>
             </table>
           </div>
+
+          {columnMapping && (
+            <>
+              <div className="section-label">Field sources</div>
+              <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+                <table>
+                  <thead><tr><th>Field</th><th>Source column in uploaded file</th></tr></thead>
+                  <tbody>
+                    {FIELD_SOURCE_DEFS.map((f) => {
+                      const source = columnMapping[f.key];
+                      return (
+                        <tr key={f.key}>
+                          <td>{f.label}</td>
+                          <td className={source ? "mono" : ""} style={!source ? { color: "var(--text-3)", fontStyle: "italic" } : undefined}>
+                            {source || "Not present in file"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="locked-note" style={{ marginBottom: 14 }}>
+                Shows which column in the originally uploaded spreadsheet supplied each field for this batch.
+              </div>
+            </>
+          )}
+
+          {extraDataRows.length > 0 && (
+            <>
+              <div className="section-label">Additional imported data</div>
+              <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+                <table>
+                  <thead><tr><th>Lot #</th><th>Field</th><th>Value</th></tr></thead>
+                  <tbody>
+                    {extraDataRows.map((row, i) => (
+                      <tr key={`${row.lotNumber}-${row.key}-${i}`}>
+                        <td className="mono">{row.lotNumber}</td>
+                        <td>{row.key}</td>
+                        <td>{String(row.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="locked-note" style={{ marginBottom: 14 }}>
+                Columns from the original spreadsheet that don't map to a standard invoice field \u2014 kept for reference.
+              </div>
+            </>
+          )}
 
           <div className="field" style={{ margin: "16px 0" }}>
             <div className="fl">Remarks</div>

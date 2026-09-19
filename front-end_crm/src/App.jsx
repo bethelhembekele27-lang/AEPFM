@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoicesSeed, canAccessPage, getDefaultPage } from "./data";
 import "./styles.css";
-
+import PublicInvoice from "./pages/PublicInvoice";
 import Login from "./components/Login";
 import Header from "./components/Header";
 import InvoiceDetailModal from "./components/InvoiceDetailModal";
@@ -17,7 +17,12 @@ import CallCenter from "./pages/CallCenter";
 import Employees from "./pages/Employees";
 
 export default function App() {
+  const publicInvoiceMatch = window.location.pathname.match(/^\/invoice\/([^/]+)\/?$/);
+  if (publicInvoiceMatch) {
+    return <PublicInvoice token={publicInvoiceMatch[1]} />;
+  }    
   const [page, setPage] = useState("dashboard");
+  // ...rest of your existing code stays exactly the same below this
   const [session, setSession] = useState(() => {
     const sessionToken = sessionStorage.getItem("authToken");
     const localToken = localStorage.getItem("authToken");

@@ -49,7 +49,7 @@ class ImportBatchSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fileName', 'batchName', 'companyName', 'auctionDate',
             'uploadDate', 'status', 'totalRecords', 'validRecords',
-            'invalidRecords', 'importedBy',
+            'invalidRecords', 'importedBy', 'columnMapping',
         ]
 
     def get_importedBy(self, obj):
@@ -180,6 +180,7 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
     winnerPhone = serializers.SerializerMethodField()
     feePercentage = serializers.SerializerMethodField()
     verifiedBy = serializers.SerializerMethodField()
+    columnMapping = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -188,7 +189,7 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
             'importBatch', 'totalAmount', 'status', 'remarks',
             'createdAt', 'updatedAt', 'lots', 'payments', 'attachments',
             'bidderName', 'companyName','auctionCompany', 'winnerPhone',
-            'feePercentage', 'verifiedBy',
+            'feePercentage', 'verifiedBy', 'columnMapping',
         ]
 
     def get_feePercentage(self, obj):
@@ -200,6 +201,13 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
     def get_verifiedBy(self, obj):
         latest = obj.payments.filter(paymentStatus='verified').order_by('-verifiedDate').first()
         return user_display_name(latest.verifiedBy) if latest else ''
+
+    def get_columnMapping(self, obj):
+        # Which original spreadsheet column supplied each field, snapshotted
+        # on the parent ImportBatch at confirm time. Empty dict for
+        # invoices with no batch (e.g. manually created) or older batches
+        # imported before this field existed.
+        return obj.importBatch.columnMapping if obj.importBatch else {}
 
 # ------------------------------------------------------- Invoice (public, unauthenticated view)
 

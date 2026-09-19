@@ -1,6 +1,9 @@
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
 from django.shortcuts import get_object_or_404
+from django.http import FileResponse
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -11,6 +14,11 @@ from rest_framework import status as http_status
 from .models import Invoice, Payment
 from .serializers import PublicInvoiceSerializer
 from .audit import log_audit
+from .pdf_rendering import load_invoice_images, render_invoice_html
+
+IMAGE_NOT_CLEAR_MESSAGE = "ምስሉ ግልጽ አይደለም፣ እባክዎ ግልጽ ፎቶ አንስተው እንደገና ይስቀሉ"
+MIN_RECEIPT_FILE_SIZE = 20_000  # bytes (~20KB) — catches accidental tiny/broken uploads
+MIN_RECEIPT_DIMENSION = 300     # px, both width and height
 
 
 class PublicReceiptUploadThrottle(AnonRateThrottle):
@@ -39,13 +47,81 @@ class PublicInvoiceView(APIView):
         return Response(PublicInvoiceSerializer(invoice).data)
 
 
+class PublicInvoicePdfView(APIView):
+    """
+    GET /api/public/invoice/<token>/pdf/
+    No login required. Renders the SAME invoice-letter template used by
+    the authenticated "Generate invoice PDF" button (via pdf_rendering.py)
+    so bidders always see exactly what staff see — no separate template
+    to drift out of sync. Generated fresh on every request; nothing is
+    saved to disk, so this always reflects the invoice's current state
+    (fee %, due date, etc.) even if it was edited after the SMS was sent.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        from weasyprint import HTML
+
+        invoice = get_object_or_404(
+            Invoice.objects.select_related('winner').prefetch_related('lots'),
+            publicToken=token,
+        )
+
+        images = load_invoice_images()
+        try:
+            html_string = render_invoice_html(invoice, auction_ref_number='', images=images)
+            pdf_bytes = HTML(string=html_string).write_pdf()
+        except Exception as e:
+            return Response(
+                {'error': f'PDF generation failed: {str(e)}'},
+                status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return FileResponse(
+            BytesIO(pdf_bytes),
+            as_attachment=False,  # display inline in the browser tab, not a forced download
+            filename=f"Invoice_{invoice.invoiceNumber}.pdf",
+            content_type='application/pdf',
+        )
+
+
+def _validate_receipt_image(receipt_file):
+    """
+    Basic sanity checks only — not true blur/legibility detection. Returns
+    an error message string if the file should be rejected, or None if
+    it's acceptable. Rewinds the file pointer afterward so it's still
+    valid for the model save.
+    """
+    if receipt_file.size < MIN_RECEIPT_FILE_SIZE:
+        return IMAGE_NOT_CLEAR_MESSAGE
+
+    try:
+        from PIL import Image
+        receipt_file.seek(0)
+        img = Image.open(receipt_file)
+        img.verify()  # cheap corruption check
+        receipt_file.seek(0)
+        img = Image.open(receipt_file)  # re-open: verify() leaves the file unusable for further reads
+        width, height = img.size
+        if width < MIN_RECEIPT_DIMENSION or height < MIN_RECEIPT_DIMENSION:
+            return IMAGE_NOT_CLEAR_MESSAGE
+    except Exception:
+        return IMAGE_NOT_CLEAR_MESSAGE
+    finally:
+        receipt_file.seek(0)
+
+    return None
+
+
 class PublicReceiptUploadView(APIView):
     """
     POST /api/public/invoice/<token>/receipt/
-    No login required. Bidder attaches a receipt file + payment details.
-    Creates a Payment flagged submittedViaPublicLink=True, sitting in
-    'pending_manager_review' — the Auction Manager reviews it for
-    legitimacy (Phase 5) before Finance ever sees it as a normal payment.
+    No login required. Bidder attaches only a receipt image — no amount,
+    method, or date fields are collected from them anymore. Those are
+    defaulted server-side. Creates a Payment flagged
+    submittedViaPublicLink=True, sitting in 'pending_manager_review' —
+    the Auction Manager reviews it for legitimacy (Phase 5) before
+    Finance ever sees it as a normal payment.
     """
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
@@ -61,23 +137,23 @@ class PublicReceiptUploadView(APIView):
             )
 
         receipt_file = request.FILES.get('receiptFile')
-        amount_paid = request.data.get('amountPaid')
-        payment_method = request.data.get('paymentMethod')
-        payment_date = request.data.get('paymentDate')
-
         if not receipt_file:
             return Response({'receiptFile': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
-        if not amount_paid:
-            return Response({'amountPaid': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
-        if not payment_method:
-            return Response({'paymentMethod': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
-        if not payment_date:
-            return Response({'paymentDate': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        image_error = _validate_receipt_image(receipt_file)
+        if image_error:
+            return Response({'error': image_error}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        # amountPaid / paymentMethod / paymentDate are no longer collected
+        # from the bidder — defaulted here instead.
+        amount_paid = request.data.get('amountPaid') or invoice.totalAmount
+        payment_method = request.data.get('paymentMethod') or 'unspecified'
+        payment_date = request.data.get('paymentDate') or timezone.localdate()
 
         try:
             amount_paid = Decimal(str(amount_paid))
         except InvalidOperation:
-            return Response({'amountPaid': ['Must be a valid number.']}, status=http_status.HTTP_400_BAD_REQUEST)
+            amount_paid = invoice.totalAmount
 
         payment = Payment.objects.create(
             invoice=invoice,
