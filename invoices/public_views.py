@@ -4,6 +4,8 @@ from io import BytesIO
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
 from django.utils import timezone
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -23,6 +25,10 @@ MIN_RECEIPT_FILE_SIZE = 20_000
 MIN_PDF_SIZE = 5_000
 MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024
 MIN_RECEIPT_DIMENSION = 300
+
+
+class PublicPdfThrottle(AnonRateThrottle):
+    scope = 'public_invoice_pdf'
 
 
 def _is_pdf(f):
@@ -95,6 +101,7 @@ class PublicInvoiceView(APIView):
         return Response(PublicInvoiceSerializer(invoice).data)
 
 
+@method_decorator(xframe_options_exempt, name='get')
 class PublicInvoicePdfView(APIView):
     """
     GET /api/public/invoice/<token>/pdf/
@@ -106,6 +113,7 @@ class PublicInvoicePdfView(APIView):
     (fee %, due date, etc.) even if it was edited after the SMS was sent.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [PublicPdfThrottle]
 
     def get(self, request, token):
         from weasyprint import HTML

@@ -1,8 +1,15 @@
 import uuid
+import uuid as uuid_lib
 from django.db import models
 from django.conf import settings
 from django.db.models import Sum
 from decimal import Decimal
+
+
+def receipt_upload_path(instance, filename):
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    new_name = f"{uuid_lib.uuid4().hex}.{ext}" if ext else uuid_lib.uuid4().hex
+    return f"receipts/{new_name}"
 
 # Create your models here.
 class Role(models.Model):
@@ -284,7 +291,7 @@ class Payment(models.Model):
     remarks = models.TextField(blank=True)
 
     # Phase 1 additions - the public receipt-upload + manager-review flow
-    receiptFile = models.FileField(upload_to='receipts/', null=True, blank=True)
+    receiptFile = models.FileField(upload_to=receipt_upload_path, null=True, blank=True)
     submittedViaPublicLink = models.BooleanField(default=False)
     verificationStatus = models.CharField(
         max_length=30, choices=VERIFICATION_STATUS_CHOICES, default='not_applicable'

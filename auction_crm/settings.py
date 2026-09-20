@@ -151,6 +151,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     "DEFAULT_THROTTLE_RATES": {
         "public_receipt_upload": "10/hour",
+        "public_invoice_pdf": "30/hour",
     },
 }
 
