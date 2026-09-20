@@ -448,8 +448,10 @@ class ImportBatchConfirmView(APIView):
     @staticmethod
     def _next_invoice_number():
         year = timezone.localdate().year
-        count = Invoice.objects.filter(invoiceNumber__startswith=f'INV-{year}-').count()
-        return f'INV-{year}-{count + 1:03d}'
+        prefix = f'INV-{year}-'
+        existing = Invoice.objects.filter(invoiceNumber__startswith=prefix).values_list('invoiceNumber', flat=True)
+        nums = [int(n.rsplit('-', 1)[1]) for n in existing if n.rsplit('-', 1)[1].isdigit()]
+        return f'{prefix}{(max(nums) + 1 if nums else 1):03d}'
 
 
 class ImportBatchViewSet(mixins.DestroyModelMixin, viewsets.ReadOnlyModelViewSet):

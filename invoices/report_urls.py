@@ -1,8 +1,11 @@
 from django.urls import path
-from .public_views import PublicInvoiceView, PublicInvoicePdfView, PublicReceiptUploadView
+from .report_views import (
+    ReportPreviewView, ReportGeneratePdfView, FilterOptionsView, RecentReportsView,
+)
 
 urlpatterns = [
-    path('public/invoice/<uuid:token>/', PublicInvoiceView.as_view(), name='public-invoice-detail'),
-    path('public/invoice/<uuid:token>/pdf/', PublicInvoicePdfView.as_view(), name='public-invoice-pdf'),
-    path('public/invoice/<uuid:token>/receipt/', PublicReceiptUploadView.as_view(), name='public-invoice-receipt-upload'),
+    path('reports/preview/', ReportPreviewView.as_view(), name='report-preview'),
+    path('reports/generate-pdf/', ReportGeneratePdfView.as_view(), name='report-generate-pdf'),
+    path('reports/filter-options/', FilterOptionsView.as_view(), name='report-filter-options'),
+    path('reports/recent/', RecentReportsView.as_view(), name='report-recent'),
 ]

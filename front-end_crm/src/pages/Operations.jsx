@@ -3,7 +3,7 @@ import { LOCKED_STATUSES, PDF_ROLES, searchFieldDefs, money } from "../data";
 import { ActionBtn } from "../components/ActionButton";
 import StatusCell from "../components/StatusCell";
 import GeneratePdfModal from "../components/GeneratePdfModal";
-import { apiCall } from "../api";
+import { apiCall, API_BASE } from "../api";
 import DueDateCell from "../components/DueDateCell";
 
 export default function Operations({ role, token, onOpenDetail }) {
@@ -146,7 +146,7 @@ async function fetchInvoices() {
       for (const [invId, pct] of Object.entries(percentagesByInvId)) {
         const amhName = amhNames[invId] || '';
 
-        const response = await fetch(`https://auction-crm-api.onrender.com/api/invoices/${invId}/generate-pdf/`, {
+        const response = await fetch(`${API_BASE}/api/invoices/${invId}/generate-pdf/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

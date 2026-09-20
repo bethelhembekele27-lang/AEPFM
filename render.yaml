@@ -1,29 +1,21 @@
-databases:
-  - name: auction-crm-db
-    plan: free
-
 services:
   - type: web
-    name: auction-crm-api
+    name: aepfm-api
     runtime: docker
     plan: free
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: auction-crm-db
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
       - key: ALLOWED_HOSTS
-        value: "auction-crm-api.onrender.com"
+        value: "aepfm-api.onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://auction-crm-frontend.onrender.com"
+        value: "https://aepfm-frontend.onrender.com"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://auction-crm-frontend.onrender.com"
-      - key: PYTHON_VERSION
-        value: "3.12.0"
+        value: "https://aepfm-frontend.onrender.com"
       - key: BOOTSTRAP_ADMIN_USERNAME
         sync: false
       - key: BOOTSTRAP_ADMIN_PASSWORD
@@ -32,14 +24,16 @@ services:
         sync: false
 
   - type: web
-    name: auction-crm-frontend
+    name: aepfm-frontend
     runtime: static
     rootDir: front-end_crm
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE
-        value: "https://auction-crm-api.onrender.com"
+        value: "https://aepfm-api.onrender.com"
+      - key: NODE_VERSION
+        value: "22"
     routes:
       - type: rewrite
         source: /*

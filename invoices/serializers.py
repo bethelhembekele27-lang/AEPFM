@@ -60,13 +60,14 @@ class ImportBatchSerializer(serializers.ModelSerializer):
 
 class FeeConfigSerializer(serializers.ModelSerializer):
     configuredBy = serializers.SerializerMethodField()
+    configuredAt = serializers.DateTimeField(source='configured_at', read_only=True)
 
     class Meta:
         model = FeeConfig
         fields = ['percentage', 'configuredBy', 'configuredAt']
 
     def get_configuredBy(self, obj):
-        return user_display_name(obj.configuredBy)
+        return user_display_name(obj.configured_by)
 
 
 # ------------------------------------------------------------- InvoiceLot
@@ -211,13 +212,18 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
 
 # ------------------------------------------------------- Invoice (public, unauthenticated view)
 
+class PublicInvoiceLotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvoiceLot
+        fields = ['id', 'lotNumber', 'auctionName', 'winningAmount', 'feePercentage', 'lotFee']
+
 class PublicInvoiceSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerializer):
     """
     Used on the public, token-gated invoice page — deliberately exposes only
     what a bidder needs to see (no internal remarks, callNotes, audit info,
     or importBatch internals).
     """
-    lots = InvoiceLotSerializer(many=True, read_only=True)
+    lots = PublicInvoiceLotSerializer(many=True, read_only=True)
     totalAmount = serializers.ReadOnlyField()
     bidderName = serializers.SerializerMethodField()
     companyName = serializers.SerializerMethodField()

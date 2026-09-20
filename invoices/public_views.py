@@ -17,8 +17,56 @@ from .audit import log_audit
 from .pdf_rendering import load_invoice_images, render_invoice_html
 
 IMAGE_NOT_CLEAR_MESSAGE = "ምስሉ ግልጽ አይደለም፣ እባክዎ ግልጽ ፎቶ አንስተው እንደገና ይስቀሉ"
-MIN_RECEIPT_FILE_SIZE = 20_000  # bytes (~20KB) — catches accidental tiny/broken uploads
-MIN_RECEIPT_DIMENSION = 300     # px, both width and height
+FILE_NOT_VALID_MESSAGE = "ፋይሉ ትክክለኛ አይደለም፣ እባክዎ ትክክለኛ PDF ወይም ግልጽ ፎቶ ይስቀሉ"
+FILE_TOO_LARGE_MESSAGE = "ፋይሉ በጣም ትልቅ ነው፣ እባክዎ ከ10MB ያነሰ ፋይል ይስቀሉ"
+MIN_RECEIPT_FILE_SIZE = 20_000
+MIN_PDF_SIZE = 5_000
+MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024
+MIN_RECEIPT_DIMENSION = 300
+
+
+def _is_pdf(f):
+    f.seek(0)
+    head = f.read(5)
+    f.seek(0)
+    return head == b'%PDF-'
+
+
+def _validate_pdf(f):
+    if f.size < MIN_PDF_SIZE:
+        return FILE_NOT_VALID_MESSAGE
+    f.seek(max(f.size - 1024, 0))
+    tail = f.read()
+    f.seek(0)
+    if b'%%EOF' not in tail:
+        return FILE_NOT_VALID_MESSAGE
+    return None
+
+
+def _validate_receipt_file(receipt_file):
+    """Accepts PDF or image, detected by content (not file extension)."""
+    if receipt_file.size > MAX_RECEIPT_FILE_SIZE:
+        return FILE_TOO_LARGE_MESSAGE
+    if _is_pdf(receipt_file):
+        return _validate_pdf(receipt_file)
+
+    if receipt_file.size < MIN_RECEIPT_FILE_SIZE:
+        return IMAGE_NOT_CLEAR_MESSAGE
+    try:
+        from PIL import Image
+        receipt_file.seek(0)
+        img = Image.open(receipt_file)
+        img.verify()
+        receipt_file.seek(0)
+        img = Image.open(receipt_file)
+        width, height = img.size
+        if width < MIN_RECEIPT_DIMENSION or height < MIN_RECEIPT_DIMENSION:
+            return IMAGE_NOT_CLEAR_MESSAGE
+    except Exception:
+        return FILE_NOT_VALID_MESSAGE
+    finally:
+        receipt_file.seek(0)
+    return None
 
 
 class PublicReceiptUploadThrottle(AnonRateThrottle):
@@ -85,34 +133,6 @@ class PublicInvoicePdfView(APIView):
         )
 
 
-def _validate_receipt_image(receipt_file):
-    """
-    Basic sanity checks only — not true blur/legibility detection. Returns
-    an error message string if the file should be rejected, or None if
-    it's acceptable. Rewinds the file pointer afterward so it's still
-    valid for the model save.
-    """
-    if receipt_file.size < MIN_RECEIPT_FILE_SIZE:
-        return IMAGE_NOT_CLEAR_MESSAGE
-
-    try:
-        from PIL import Image
-        receipt_file.seek(0)
-        img = Image.open(receipt_file)
-        img.verify()  # cheap corruption check
-        receipt_file.seek(0)
-        img = Image.open(receipt_file)  # re-open: verify() leaves the file unusable for further reads
-        width, height = img.size
-        if width < MIN_RECEIPT_DIMENSION or height < MIN_RECEIPT_DIMENSION:
-            return IMAGE_NOT_CLEAR_MESSAGE
-    except Exception:
-        return IMAGE_NOT_CLEAR_MESSAGE
-    finally:
-        receipt_file.seek(0)
-
-    return None
-
-
 class PublicReceiptUploadView(APIView):
     """
     POST /api/public/invoice/<token>/receipt/
@@ -140,7 +160,7 @@ class PublicReceiptUploadView(APIView):
         if not receipt_file:
             return Response({'receiptFile': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        image_error = _validate_receipt_image(receipt_file)
+        image_error = _validate_receipt_file(receipt_file)
         if image_error:
             return Response({'error': image_error}, status=http_status.HTTP_400_BAD_REQUEST)
 

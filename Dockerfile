@@ -20,4 +20,4 @@ COPY . .
 
 RUN python manage.py collectstatic --noinput
 
-CMD sh -c "echo '=== RUNNING MIGRATIONS ===' && python manage.py migrate --noinput && echo '=== MIGRATIONS DONE ===' && gunicorn auction_crm.wsgi:application --bind 0.0.0.0:10000"
+CMD sh -c "python manage.py migrate --noinput && python manage.py bootstrap_admin && gunicorn auction_crm.wsgi:application --bind 0.0.0.0:10000"

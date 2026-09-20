@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiCall } from "../api";
+import { apiCall, API_BASE } from "../api";
 
 const REPORT_TYPE_OPTIONS = [
   { v: "outstanding", l: "Outstanding processing fees" },
@@ -144,7 +144,7 @@ export default function Reports({ role, token }) {
     setError("");
     setPdfLoading(true);
     try {
-      const res = await fetch(`https://auction-crm-api.onrender.com/api/reports/generate-pdf/`, {
+      const res = await fetch(`${API_BASE}/api/reports/generate-pdf/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

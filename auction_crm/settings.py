@@ -25,6 +25,7 @@ CSRF_TRUSTED_ORIGINS = config(
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 PDFSHIFT_API_KEY = config("PDFSHIFT_API_KEY", default="")
 
 # Application definition
@@ -47,8 +48,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -85,7 +84,8 @@ WSGI_APPLICATION = "auction_crm.wsgi.application"
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
+        conn_max_age=60,
+        conn_health_checks=True,
         ssl_require=not DEBUG,
     )
 }

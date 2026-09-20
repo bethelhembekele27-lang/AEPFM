@@ -13,6 +13,7 @@ from io import BytesIO
 from decimal import Decimal
 
 from .audit import log_audit
+from .pdf_rendering import load_invoice_images, render_invoice_html
 import base64
 import os
 from django.conf import settings
@@ -28,17 +29,6 @@ from .serializers import (
 from .permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
 
 from datetime import datetime, timedelta, date
-
-def _join_amharic_list(items):
-        """'A' / 'A እና B' / 'A, B እና C' — Amharic-style list joining."""
-        items = [str(i) for i in items]
-        if not items:
-            return ""
-        if len(items) == 1:
-            return items[0]
-        if len(items) == 2:
-            return f"{items[0]} እና {items[1]}"
-        return ", ".join(items[:-1]) + f" እና {items[-1]}"
 
 class AuctionViewSet(viewsets.ModelViewSet):
     queryset = Auction.objects.all().order_by('-auctionDate')
@@ -193,7 +183,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='generate-pdf')
     def generate_pdf(self, request, pk=None):
-        from weasyprint import HTML
+        from django.db import transaction
         invoice = self.get_object()
 
         fee_percentage = request.data.get('feePercentage')
@@ -208,142 +198,43 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         paragraph1_override = request.data.get('paragraph1', '').strip()
         paragraph2_override = request.data.get('paragraph2', '').strip()
 
-        if fee_percentage is not None:
-            fee_percentage = Decimal(str(fee_percentage))
-            for lot in invoice.lots.all():
-                lot.feePercentage = fee_percentage
-                lot.save()
-        if bidder_name_amharic:
-            invoice.winner.bidderNameAmharic = bidder_name_amharic
-            invoice.winner.save(update_fields=['bidderNameAmharic'])
-
-        if invoice.status == 'invoice_generated':
-            previous = invoice.status
-            invoice.status = 'pending_payment'
-            invoice.save(update_fields=['status', 'updatedAt'])
-            log_audit(invoice, 'Generate invoice PDF', request.user, previous, invoice.status, action_type='generate_invoice_pdf')
-        else:
-            log_audit(invoice, 'Generate invoice PDF', request.user, invoice.status, invoice.status, action_type='generate_invoice_pdf')
-
-        images = {}
-        static_dir = os.path.join(settings.BASE_DIR, 'invoices', 'static')
-        for filename, key in [('logo.png', 'logo'), ('stamp.png', 'stamp'),
-                            ('signature.png', 'signature'), ('footer.png', 'footer'), ('watermark.png', 'watermark')]:
-            filepath = os.path.join(static_dir, filename)
-            images[key] = ''
-            if os.path.exists(filepath):
-                with open(filepath, 'rb') as f:
-                    images[key] = base64.b64encode(f.read()).decode('utf-8')
+        images = load_invoice_images()
 
         try:
-            html_string = self._render_invoice_html(
-                invoice, auction_ref_number, images,
-                amount_in_words, fee_in_words, office_address,
-                total_amount_override, fee_amount_override, bank_account_override,
-                paragraph1_override, paragraph2_override,
-            )
-            pdf_bytes = HTML(string=html_string).write_pdf()
-            return FileResponse(
-                BytesIO(pdf_bytes),
-                as_attachment=True,
-                filename=f"Invoice_{invoice.invoiceNumber}.pdf",
-                content_type='application/pdf'
-            )
+            from weasyprint import HTML
+            with transaction.atomic():
+                if fee_percentage is not None:
+                    fee_percentage = Decimal(str(fee_percentage))
+                    for lot in invoice.lots.all():
+                        lot.feePercentage = fee_percentage
+                        lot.save()
+                if bidder_name_amharic:
+                    invoice.winner.bidderNameAmharic = bidder_name_amharic
+                    invoice.winner.save(update_fields=['bidderNameAmharic'])
+
+                previous = invoice.status
+                if invoice.status == 'invoice_generated':
+                    invoice.status = 'pending_payment'
+                    invoice.save(update_fields=['status', 'updatedAt'])
+                log_audit(invoice, 'Generate invoice PDF', request.user, previous, invoice.status, action_type='generate_invoice_pdf')
+
+                html_string = render_invoice_html(
+                    invoice, auction_ref_number, images,
+                    amount_in_words, fee_in_words, office_address,
+                    total_amount_override, fee_amount_override, bank_account_override,
+                    paragraph1_override, paragraph2_override,
+                )
+                pdf_bytes = HTML(string=html_string).write_pdf()
         except Exception as e:
             return Response({'detail': f'PDF generation failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def _render_invoice_html(self, invoice, auction_ref_number, images,amount_in_words='', fee_in_words='', office_address='',total_amount_override=None, fee_amount_override=None,bank_account_override='', paragraph1_override='', paragraph2_override=''):
-        winner = invoice.winner
-        display_name = winner.bidderNameAmharic or winner.bidderName
-        lots = list(invoice.lots.all())
-
-        total_amount = (
-            Decimal(str(total_amount_override))
-            if total_amount_override not in (None, '')
-            else sum((lot.winningAmount for lot in lots), Decimal('0.00'))
+        return FileResponse(
+            BytesIO(pdf_bytes),
+            as_attachment=True,
+            filename=f"Invoice_{invoice.invoiceNumber}.pdf",
+            content_type='application/pdf'
         )
-        total_fee = (
-            Decimal(str(fee_amount_override))
-            if fee_amount_override not in (None, '')
-            else sum((lot.lotFee for lot in lots), Decimal('0.00'))
-        )
-        fee_percentage = lots[0].feePercentage.normalize() if lots else Decimal('0')
-        auction_name = lots[0].auctionName if lots else ''
-        lot_numbers = _join_amharic_list([lot.lotNumber for lot in lots])
-        bank_account = bank_account_override or "1000547266289"
 
-        if paragraph1_override:
-            paragraph1 = paragraph1_override
-        else:
-            amount_words_part = f" ({amount_in_words})" if amount_in_words else ""
-            fee_words_part = f" ({fee_in_words})" if fee_in_words else ""
-            paragraph1 = (
-                f"{auction_name} ለኩባንያው አገልግሎት የማያሰጡ የተለያዩ ዕቃዎችን በጨረታ አወዳድሮ ለመሸጥ ባወጣው የጨረታ ቁጥር {auction_ref_number} "
-                f"ተሳትፈው በሎት ቁጥር {lot_numbers} የተጠቀሱትን ለመግዛት ባቀረቡት ጠቅላላ ዋጋ ቫትን ጨምሮ ብር {total_amount:,.2f}{amount_words_part} ሲሆን "
-                f"የንብረቶቹን ርክክብ መመሪያ ተመልክተው ከተረከቡ በኋላ ከአሸነፉበት ዋጋ ላይ የሚታሰብ {fee_percentage}% (processing fee) {total_fee:,.2f}{fee_words_part} "
-                f"ለአክሽን ኢትዮጵያ የሚከፍሉ ይሆናል፡፡"
-            )
-
-        if paragraph2_override:
-            paragraph2 = paragraph2_override
-        else:
-            default_address = "ቦሌ አትላስ ከአውሮፓ ዩኒየን ዝቅ ብሎ ከለላ ህንጻ 3ኛ ፎቅ ቢሮ ቁጥር 301"
-            address_text = office_address or default_address
-            paragraph2 = f"ስለሆነም በኢትዮጵያ ንግድ ባንክ የሂሳብ ቁጥር {bank_account} ገቢ በማድረግ {address_text} በአካል በመገኘት ደረሰኝ እንዲያስገቡ እንጠይቃለን፡፡"
-
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                @page {{ size: A4; margin: 0; }}
-                body {{ font-family: 'Noto Sans Ethiopic', sans-serif; font-size: 16.5px; color: #111; margin: 0; padding: 45px 55px 0 55px; }}
-                .header {{ display: flex; justify-content: space-between; align-items: flex-start; }}
-                .logo img {{ width: 240px; }}
-                .ref-block {{ text-align: right; font-size: 14.5px; }}
-                .ref-block div {{ margin-bottom: 6px; }}
-                .ref-block .val {{ text-decoration: underline; }}
-                hr.rule {{ border: none; border-top: 1px solid #999; margin: 12px 0 30px 0; }}
-                .salutation {{ margin: 0 0 15px 0; font-size: 14.5px; }}
-                .subject {{ text-align: center; font-weight: bold; text-decoration: underline; margin: 20px 0; font-size: 14.5px; }}
-                .body-text {{ text-align: justify; line-height: 2.1; font-size: 14.5px; margin-bottom: 18px; }}
-                .closing {{ text-align: right; margin-top: 50px; font-size: 14.5px; }}
-                .stamp-sig-row {{ display: flex; justify-content: space-between; align-items: center; margin-top: 40px; }}
-                .watermark {{ position: fixed; left: 25%; top: 50%; transform: translate(-50%, -25%); opacity: 0.3; z-index: -1; width: 900px; }}
-                .stamp-img {{ width: 250px; margin-left: 50px; }}
-                .sig-block {{ text-align: right; font-size: 10.5px; }}
-                .sig-img {{ width: 60px; display: block; margin-left: auto; margin-bottom: 4px; }}
-                .footer-band {{ position: fixed; bottom: 0; left: 0; width: 100%; }}
-                .footer-band img {{ width: 100%; display: block; }}
-            </style>
-        </head>
-        <body>
-            <img class="watermark" src="data:image/png;base64,{images['watermark']}">
-            <div class="header">
-                <div class="logo"><img src="data:image/png;base64,{images['logo']}"></div>
-                <div class="ref-block">
-                    <div>ቀን: <span class="val">{invoice.invoiceDate.strftime('%d/%m/%Y')}</span></div>
-                    <div>ቁጥር: <span class="val">{invoice.invoiceNumber}</span></div>
-                </div>
-            </div>
-            <hr class="rule">
-            <div class="salutation">
-                <div>ለ {display_name}</div>
-                <div>ባሉበት</div>
-            </div>
-            <div class="subject">ጉዳይ፡- የጨረታ processing fee እንዲከፍሉ ስለማሳወቅ</div>
-            <div class="body-text">{paragraph1}</div>
-            <div class="body-text">{paragraph2}</div>
-            <div class="body-text">ማሳሰቢያ፡- ለጨረታ መወዳደሪያ ያስያዙት ሲ.ፒ.ኦ ተመላሽ የሚደረገው processing fee መከፈላችሁ ከተረጋገጠ በኋላ ነው፡፡</div>
-            <div class="closing">ከሰላምታ ጋር</div>
-            <div class="stamp-sig-row">
-                <img class="stamp-img" src="data:image/png;base64,{images['stamp']}">
-            </div>
-            <div class="footer-band"><img src="data:image/png;base64,{images['footer']}"></div>
-        </body>
-        </html>
-        """
     @action(detail=True, methods=['post'], url_path='change-status')
     def change_status(self, request, pk=None):
         invoice = self.get_object()
@@ -408,7 +299,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             previous = invoice.status
             invoice.status = 'payment_submitted'
             invoice.save(update_fields=['status', 'updatedAt'])
-            log_audit(invoice, 'Extend due date', request.user, previous, new_due_date, request.data.get('reason', ''), action_type='extend_due_date')
+            log_audit(invoice, 'Payment uploaded', request.user, previous, invoice.status, action_type='upload_payment')
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get', 'post'], url_path='attachments')
@@ -527,7 +418,7 @@ class FeeConfigView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        config = FeeConfig.objects.filter(isActive=True).first()
+        config = FeeConfig.objects.filter(is_active=True).first()
         if not config:
             return Response({'percentage': '0.95', 'configuredBy': '', 'configuredAt': None})
         return Response(FeeConfigSerializer(config).data)
@@ -539,8 +430,8 @@ class FeeConfigView(generics.GenericAPIView):
         if percentage is None:
             return Response({'percentage': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
 
-        FeeConfig.objects.filter(isActive=True).update(isActive=False)
-        config = FeeConfig.objects.create(percentage=percentage, configuredBy=request.user, isActive=True)
+        FeeConfig.objects.filter(is_active=True).update(is_active=False)
+        config = FeeConfig.objects.create(percentage=percentage, configured_by=request.user, is_active=True)
         return Response(FeeConfigSerializer(config).data)
 
 

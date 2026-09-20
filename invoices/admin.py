@@ -81,7 +81,7 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ('invoiceNumber', 'winner__bidderName', 'winner__winnerPhone')
     date_hierarchy = 'dueDate'
-    readonly_fields = ('createdAt', 'updatedAt')
+    readonly_fields = ('createdAt', 'updatedAt', 'publicToken')
     inlines = [InvoiceLotInline, PaymentInline, AttachmentInline]
 
     def total_amount_display(self, obj):
