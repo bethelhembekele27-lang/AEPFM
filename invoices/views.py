@@ -218,6 +218,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                     invoice.save(update_fields=['status', 'updatedAt'])
                 log_audit(invoice, 'Generate invoice PDF', request.user, previous, invoice.status, action_type='generate_invoice_pdf')
 
+                invoice.letterData = {
+                    'auctionRefNumber': auction_ref_number,
+                    'amountInWords': amount_in_words,
+                    'feeInWords': fee_in_words,
+                    'officeAddress': office_address,
+                    'totalAmount': '' if total_amount_override in (None, '') else str(total_amount_override),
+                    'feeAmount': '' if fee_amount_override in (None, '') else str(fee_amount_override),
+                    'bankAccount': bank_account_override,
+                    'paragraph1': paragraph1_override,
+                    'paragraph2': paragraph2_override,
+                }
+                invoice.save(update_fields=['letterData', 'updatedAt'])
+
                 html_string = render_invoice_html(
                     invoice, auction_ref_number, images,
                     amount_in_words, fee_in_words, office_address,

@@ -20,6 +20,7 @@ PRIVILEGE_CATALOG = [
     # staff-entered payments. This one is planned to eventually be
     # automated, so it's kept as its own distinct privilege.
     {'key': 'manager_verify_receipt', 'label': 'Review bidder-submitted receipts', 'category': 'Processing Fees'},
+    {'key': 'send_sms', 'label': 'Send invoice SMS to bidders', 'category': 'Processing Fees'},
 ]
 
 PRIVILEGE_KEYS = {p['key'] for p in PRIVILEGE_CATALOG}
@@ -28,7 +29,7 @@ BUILT_IN_ROLE_DEFAULTS = {
     'Administrator': [p['key'] for p in PRIVILEGE_CATALOG],
     'Auction Manager': [
         'view_invoices', 'edit_invoice', 'generate_invoice', 'import_batches',
-        'view_reports', 'view_audit', 'manager_verify_receipt',
+        'view_reports', 'view_audit', 'manager_verify_receipt', 'send_sms',
     ],
     'Finance Manager': ['view_invoices', 'change_status_generic', 'verify_payment', 'view_reports', 'view_audit'],
     'CRM / Call Center Officer': ['manage_call_center', 'view_call_center_dashboard', 'view_reports'],

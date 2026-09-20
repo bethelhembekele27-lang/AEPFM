@@ -3,7 +3,7 @@ from django.db.models import Sum
 
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
-    Invoice, InvoiceLot, Payment, Attachment, AuditLog,GeneratedReport,Role,
+    Invoice, InvoiceLot, Payment, Attachment, AuditLog,GeneratedReport,Role, SmsLog,
 )
 
 @admin.register(Role)
@@ -144,3 +144,14 @@ class GeneratedReportAdmin(admin.ModelAdmin):
     list_display = ('title', 'periodLabel', 'rowCount', 'totalAmount', 'generatedBy', 'generatedAt')
     list_filter = ('reportType',)
     readonly_fields = ('generatedAt',)
+
+
+@admin.register(SmsLog)
+class SmsLogAdmin(admin.ModelAdmin):
+    list_display = ('invoice', 'phone', 'success', 'sentBy', 'sentAt')
+    list_filter = ('success',)
+    search_fields = ('invoice__invoiceNumber', 'phone')
+    readonly_fields = ('invoice', 'phone', 'message', 'success', 'providerResponse', 'sentBy', 'sentAt')
+
+    def has_add_permission(self, request):
+        return False

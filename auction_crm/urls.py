@@ -10,4 +10,5 @@ urlpatterns = [
     path('api/', include('invoices.call_center_urls')),
     path('api/', include('invoices.employee_urls')),
     path('api/', include('invoices.public_urls')),
+    path('api/', include('invoices.sms_urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

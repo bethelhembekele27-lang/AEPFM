@@ -131,7 +131,13 @@ class PublicInvoicePdfView(APIView):
 
         images = load_invoice_images()
         try:
-            html_string = render_invoice_html(invoice, auction_ref_number='', images=images)
+            data = invoice.letterData or {}
+            html_string = render_invoice_html(
+                invoice, data.get('auctionRefNumber', ''), images,
+                data.get('amountInWords', ''), data.get('feeInWords', ''), data.get('officeAddress', ''),
+                data.get('totalAmount') or None, data.get('feeAmount') or None, data.get('bankAccount', ''),
+                data.get('paragraph1', ''), data.get('paragraph2', ''),
+            )
             pdf_bytes = HTML(string=html_string).write_pdf()
         except Exception as e:
             return Response(

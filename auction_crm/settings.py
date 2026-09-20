@@ -161,6 +161,14 @@ MEDIA_ROOT = BASE_DIR / "media"
 # AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 # AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="")
 
+# --- SMS (Phase 4) ---
+FRONTEND_BASE_URL = config("FRONTEND_BASE_URL", default="http://localhost:5173").rstrip("/")
+SMS_BACKEND = config("SMS_BACKEND", default="console")   # 'console' sends nothing; 'textbee' sends for real
+SMS_ALLOWED_NUMBERS = [n.strip() for n in config("SMS_ALLOWED_NUMBERS", default="").split(",") if n.strip()]
+SMS_DEFAULT_DUE_DAYS = config("SMS_DEFAULT_DUE_DAYS", default=14, cast=int)
+TEXTBEE_API_KEY = config("TEXTBEE_API_KEY", default="")
+TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
+
 
 # Django REST Framework
 REST_FRAMEWORK = {

@@ -15,6 +15,7 @@ import Reports from "./pages/Reports";
 import AuditTrail from "./pages/AuditTrail";
 import CallCenter from "./pages/CallCenter";
 import Employees from "./pages/Employees";
+import SendSms from "./pages/SendSms";
 
 export default function App() {
   const publicInvoiceMatch = window.location.pathname.match(/^\/invoice\/([^/]+)\/?$/);
@@ -55,6 +56,7 @@ export default function App() {
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [invoices, setInvoices] = useState(invoicesSeed);
   const [detailInvNumber, setDetailInvNumber] = useState(null);
+  const [smsInvoiceId, setSmsInvoiceId] = useState(null);
   const detailInvoice = invoices.find((inv) => inv.inv === detailInvNumber) || null;
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export default function App() {
     <div className="app" data-theme={theme}>
       <Header
         page={page}
-        setPage={setPage}
+        setPage={(p) => { setSmsInvoiceId(null); setPage(p); }}
         role={session.role}
         username={session.username}
         theme={theme}
@@ -128,13 +130,17 @@ export default function App() {
               token={session.token}
             />
             )}
-          {page === "operations" && (
-          <Operations
-            role={session.role}
-            token={session.token}
-            onOpenDetail={setDetailInvNumber}
-          />
-            )}
+          {page === "operations" && !smsInvoiceId && (
+            <Operations
+              role={session.role}
+              token={session.token}
+              onOpenDetail={setDetailInvNumber}
+              onOpenSms={setSmsInvoiceId}
+            />
+          )}
+          {page === "operations" && smsInvoiceId && (
+            <SendSms invoiceId={smsInvoiceId} onBack={() => setSmsInvoiceId(null)} />
+          )}
           {page === "dashboard" && <Dashboard role={session.role} token={session.token} />}
           {page === "queues" && <Queues role={session.role} token={session.token} />}
           {page === "reports" && <Reports role={session.role} token={session.token} />}

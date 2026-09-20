@@ -6,7 +6,7 @@ import GeneratePdfModal from "../components/GeneratePdfModal";
 import { apiCall, API_BASE } from "../api";
 import DueDateCell from "../components/DueDateCell";
 
-export default function Operations({ role, token, onOpenDetail }) {
+export default function Operations({ role, token, onOpenDetail, onOpenSms }) {
   const [searchField, setSearchField] = useState("bidderName");
   const [searchValue, setSearchValue] = useState("");
   const [searchValueTo, setSearchValueTo] = useState("");
@@ -380,11 +380,11 @@ function exportRecords() {
                 <th style={{ width: 32 }}>
                   {canGeneratePdf && <input type="checkbox" checked={rows.length > 0 && selected.length === rows.length} onChange={toggleAll} />}
                 </th>
-                <th>Invoice #</th><th>Bidder</th><th>Auctioning Company</th><th>Lots</th><th>Total amount</th><th>Due date</th><th>Status</th>
+                <th>Invoice #</th><th>Bidder</th><th>Auctioning Company</th><th>Lots</th><th>Total amount</th><th>Due date</th><th>Status</th><th>SMS</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={8} style={{ textAlign: "center", color: "var(--text-3)", padding: 28 }}>No records match that search</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center", color: "var(--text-3)", padding: 28 }}>No records match that search</td></tr>}
               {rows.map((inv) => (
                 <tr key={inv.id}>
                   <td>
@@ -411,6 +411,18 @@ function exportRecords() {
                   <td className="amount">{money(inv.totalAmount.toFixed(2))}</td>
                   <td><DueDateCell invoice={inv} role={role} onChangeDueDate={changeDueDate} /></td>
                   <td><StatusCell invoice={inv} role={role} onChangeStatus={changeStatus} /></td>
+                  <td>
+                    {inv.smsSentAt && (
+                      <div style={{ fontSize: 11.5, color: "var(--green)", marginBottom: 4 }}>
+                        SMS sent ✓ {new Date(inv.smsSentAt).toLocaleDateString()}
+                      </div>
+                    )}
+                    {canGeneratePdf && !LOCKED_STATUSES.includes(inv.status) && inv.status !== "invoice_generated" && (
+                      <button className="btn btn-sm" onClick={() => onOpenSms(inv.id)}>
+                        {inv.smsSentAt ? "Resend SMS" : "Send SMS"}
+                      </button>
+                    )}
+                  </td>
                   </tr>
               ))}
             </tbody>

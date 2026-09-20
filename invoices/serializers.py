@@ -165,7 +165,7 @@ class InvoiceListSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerialize
             'id', 'invoiceNumber', 'invoiceDate', 'dueDate', 'winner',
             'totalAmount', 'status', 'createdAt', 'updatedAt',
             'bidderName', 'companyName','auctionCompany', 'winnerPhone',
-            'callNotes', 'lots',
+            'callNotes', 'lots', 'smsSentAt', 'smsSendCount',
         ]
 # -------------------------------------------------- Invoice (detail view)
 
@@ -190,7 +190,7 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
             'importBatch', 'totalAmount', 'status', 'remarks',
             'createdAt', 'updatedAt', 'lots', 'payments', 'attachments',
             'bidderName', 'companyName','auctionCompany', 'winnerPhone',
-            'feePercentage', 'verifiedBy', 'columnMapping',
+            'feePercentage', 'verifiedBy', 'columnMapping', 'smsSentAt', 'smsSendCount',
         ]
 
     def get_feePercentage(self, obj):

@@ -32,6 +32,16 @@ services:
         sync: false
       - key: B2_APPLICATION_KEY
         sync: false
+      - key: FRONTEND_BASE_URL
+        value: "https://aepfm-frontend.onrender.com"
+      - key: SMS_BACKEND
+        value: "console"
+      - key: SMS_ALLOWED_NUMBERS
+        sync: false
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
+        sync: false
 
   - type: web
     name: aepfm-frontend

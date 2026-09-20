@@ -201,6 +201,14 @@ class Invoice(models.Model):
     # we decide otherwise later.
     publicToken = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
+    # Phase 4: SMS tracking + the letter wording used when the PDF was generated
+    smsSentAt = models.DateTimeField(null=True, blank=True)
+    smsSendCount = models.PositiveIntegerField(default=0)
+    letterData = models.JSONField(
+        default=dict, blank=True,
+        help_text="Values entered when the invoice PDF was last generated; reused by the public PDF so bidders see the same letter.",
+    )
+
     @property
     def totalAmount(self):
         return self.lots.aggregate(total=Sum('lotFee'))['total'] or Decimal('0.00')
@@ -347,6 +355,7 @@ class AuditLog(models.Model):
         ('extend_due_date', 'Extend due date'),
         ('upload_payment', 'Payment uploaded'),
         ('add_call_note', 'Call center note updated'),
+        ('send_sms', 'SMS sent'),
         ('other', 'Other'),
     ]
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='audit_logs')
@@ -364,6 +373,24 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.invoice.invoiceNumber}: {self.action}"
+
+
+class SmsLog(models.Model):
+    """One row per SMS attempt (successful or not). Never edited."""
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='sms_logs')
+    phone = models.CharField(max_length=20)
+    message = models.TextField()
+    success = models.BooleanField(default=False)
+    providerResponse = models.TextField(blank=True, default='')
+    sentBy = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    sentAt = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sentAt']
+
+    def __str__(self):
+        return f"{self.invoice.invoiceNumber} -> {self.phone} ({'ok' if self.success else 'failed'})"
+
 
 class GeneratedReport(models.Model):
     """

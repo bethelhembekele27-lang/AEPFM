@@ -16,7 +16,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         today = timezone.localdate()
-        overdue = Invoice.objects.filter(status='pending_payment', dueDate__lt=today)
+        overdue = Invoice.objects.filter(status='pending_payment', dueDate__lt=today, smsSentAt__isnull=False)
 
         count = 0
         for invoice in overdue:

@@ -7,6 +7,7 @@ const ACTION_TYPE_LABELS = {
   'extend_due_date': 'Extend due date',
   'upload_payment': 'Payment uploaded',
   'add_call_note': 'Call center note updated',
+  'send_sms': 'SMS sent',
   'other': 'Other',
 };
 
