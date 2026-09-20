@@ -32,6 +32,6 @@ BUILT_IN_ROLE_DEFAULTS = {
         'view_reports', 'view_audit', 'manager_verify_receipt', 'send_sms',
     ],
     'Finance Manager': ['view_invoices', 'change_status_generic', 'verify_payment', 'view_reports', 'view_audit'],
-    'CRM / Call Center Officer': ['manage_call_center', 'view_call_center_dashboard', 'view_reports'],
+    'CRM / Call Center Officer': ['manage_call_center', 'view_call_center_dashboard', 'view_reports', 'send_sms'],
     'Viewer': ['view_invoices', 'view_audit'],
 }

@@ -5,8 +5,10 @@ import StatusCell from "../components/StatusCell";
 import GeneratePdfModal from "../components/GeneratePdfModal";
 import { apiCall, API_BASE } from "../api";
 import DueDateCell from "../components/DueDateCell";
+import SendSmsBulkModal from "../components/SendSmsBulkModal";
+import NewWinnerModal from "../components/NewWinnerModal";
 
-export default function Operations({ role, token, onOpenDetail, onOpenSms }) {
+export default function Operations({ role, token, onOpenDetail }) {
   const [searchField, setSearchField] = useState("bidderName");
   const [searchValue, setSearchValue] = useState("");
   const [searchValueTo, setSearchValueTo] = useState("");
@@ -16,6 +18,8 @@ export default function Operations({ role, token, onOpenDetail, onOpenSms }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showSmsBulkModal, setShowSmsBulkModal] = useState(false);
+  const [showNewWinner, setShowNewWinner] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
 
@@ -266,7 +270,7 @@ function exportRecords() {
     window.alert("No records to export.");
     return;
   }
-  const headers = ["Invoice #", "Bidder", "Company", "Lots", "Total Amount", "Due Date", "Status"];
+  const headers = ["Invoice #", "Bidder", "Company", "Lots", "Fee Amount", "Due Date", "Status"];
   const csvRows = rowsToExport.map((inv) => [
     inv.invoiceNumber,
     inv.bidderName,
@@ -332,12 +336,23 @@ function exportRecords() {
           </span>
         )}
 
+        <button className="btn btn-primary" onClick={() => setShowNewWinner(true)}>
+          New winner
+        </button>
+
         <ActionBtn
           label="Generate invoice PDF"
           roles={PDF_ROLES}
           role={role}
           onClick={openGenerateModal}
         />
+
+        <button
+          className="btn btn-blue"
+          onClick={() => { if (selected.length === 0) { window.alert("Select at least one invoice first."); return; } setShowSmsBulkModal(true); }}
+        >
+          Send SMS
+        </button>
 
         <button className="btn btn-blue" onClick={exportRecords}>
           Export records
@@ -380,7 +395,7 @@ function exportRecords() {
                 <th style={{ width: 32 }}>
                   {canGeneratePdf && <input type="checkbox" checked={rows.length > 0 && selected.length === rows.length} onChange={toggleAll} />}
                 </th>
-                <th>Invoice #</th><th>Bidder</th><th>Auctioning Company</th><th>Lots</th><th>Total amount</th><th>Due date</th><th>Status</th><th>SMS</th>
+                <th>Invoice #</th><th>Bidder</th><th>Auctioning Company</th><th>Lots</th><th>Fee amount</th><th>Due date</th><th>Status</th><th>SMS</th>
               </tr>
             </thead>
             <tbody>
@@ -413,14 +428,9 @@ function exportRecords() {
                   <td><StatusCell invoice={inv} role={role} onChangeStatus={changeStatus} /></td>
                   <td>
                     {inv.smsSentAt && (
-                      <div style={{ fontSize: 11.5, color: "var(--green)", marginBottom: 4 }}>
+                      <div style={{ fontSize: 11.5, color: "var(--green)" }}>
                         SMS sent ✓ {new Date(inv.smsSentAt).toLocaleDateString()}
                       </div>
-                    )}
-                    {canGeneratePdf && !LOCKED_STATUSES.includes(inv.status) && inv.status !== "invoice_generated" && (
-                      <button className="btn btn-sm" onClick={() => onOpenSms(inv.id)}>
-                        {inv.smsSentAt ? "Resend SMS" : "Send SMS"}
-                      </button>
                     )}
                   </td>
                   </tr>
@@ -471,6 +481,22 @@ function exportRecords() {
           </div>
         </div>
       )}
+      {showSmsBulkModal && (
+        <SendSmsBulkModal
+          invoices={invoices.filter((i) => selected.includes(i.id))}
+          token={token}
+          onClose={() => setShowSmsBulkModal(false)}
+          onDone={() => { fetchInvoices(); setSelected([]); }}
+        />
+      )}
+      {showNewWinner && (
+        <NewWinnerModal
+          token={token}
+          onClose={() => setShowNewWinner(false)}
+          onCreated={fetchInvoices}
+        />
+      )}
+
     </div>
   );
 }

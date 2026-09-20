@@ -104,11 +104,22 @@ class SmsSendView(APIView):
         if problem:
             return Response({'error': problem}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        phone = normalize_phone(invoice.winner.winnerPhone)
+        phone_override = str(request.data.get('phone', '')).strip()
+        raw_phone_to_check = phone_override or invoice.winner.winnerPhone
+        phone = normalize_phone(raw_phone_to_check)
         if not phone:
             return Response(
-                {'error': f'"{invoice.winner.winnerPhone}" is not a valid Ethiopian mobile number. Fix the phone number on the winner record first.'},
+                {'error': f'"{raw_phone_to_check}" is not a valid Ethiopian mobile number.'},
                 status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        if phone_override and phone_override != invoice.winner.winnerPhone:
+            previous_phone = invoice.winner.winnerPhone
+            invoice.winner.winnerPhone = phone_override
+            invoice.winner.save(update_fields=['winnerPhone'])
+            log_audit(
+                invoice, 'Update winner phone number', request.user,
+                previous_phone, phone_override,
+                reason='Edited while sending SMS', action_type='other',
             )
 
         message = str(request.data.get('message', '')).strip()
@@ -143,19 +154,23 @@ class SmsSendView(APIView):
 
         previous_due = invoice.dueDate
         new_due = timezone.localdate() + timedelta(days=days)
+        previous_status = invoice.status
         with transaction.atomic():
             SmsLog.objects.create(
                 invoice=invoice, phone=phone, message=message, success=True,
                 providerResponse=provider_response[:2000], sentBy=request.user,
             )
+            if invoice.status == 'overdue':
+                invoice.status = 'pending_payment'
             invoice.smsSentAt = timezone.now()
             invoice.smsSendCount += 1
             invoice.dueDate = new_due
-            invoice.save(update_fields=['smsSentAt', 'smsSendCount', 'dueDate', 'updatedAt'])
+            invoice.save(update_fields=['status', 'smsSentAt', 'smsSendCount', 'dueDate', 'updatedAt'])
             log_audit(
                 invoice, 'SMS sent to bidder', request.user,
                 previous_value=previous_due, new_value=new_due,
-                reason=f'SMS #{invoice.smsSendCount} to +{phone}; payment due in {days} days.',
+                reason=f'SMS #{invoice.smsSendCount} to +{phone}; payment due in {days} days.'
+                       + (f' Status changed from overdue to pending_payment.' if previous_status == 'overdue' else ''),
                 action_type='send_sms',
             )
 
@@ -166,3 +181,69 @@ class SmsSendView(APIView):
             'dueDate': str(new_due),
             'backend': settings.SMS_BACKEND,
         })
+
+
+class BulkSmsSendView(APIView):
+    """POST /api/invoices/sms/bulk-send/ {invoiceIds: [...], dueDays?: N}
+    Sends the auto-generated message to each invoice, skipping ineligible
+    ones (bad phone, wrong status, sent moments ago). Used by Operations
+    bulk-select, Import Batch bulk-send, and the eventual cutover backfill."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not has_permission(request.user, 'send_sms'):
+            return _forbidden()
+        invoice_ids = request.data.get('invoiceIds', [])
+        override_days = request.data.get('dueDays')
+        sent, skipped = [], []
+
+        for invoice_id in invoice_ids:
+            try:
+                invoice = Invoice.objects.select_related('winner').get(pk=invoice_id)
+            except Invoice.DoesNotExist:
+                skipped.append({'invoiceId': invoice_id, 'reason': 'Not found'})
+                continue
+
+            problem = _state_problem(invoice)
+            if problem:
+                skipped.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'reason': problem})
+                continue
+
+            phone = normalize_phone(invoice.winner.winnerPhone)
+            if not phone:
+                skipped.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'reason': f'Invalid phone: {invoice.winner.winnerPhone}'})
+                continue
+
+            try:
+                days = _parse_days(override_days, _default_days(invoice))
+            except ValueError as exc:
+                skipped.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'reason': str(exc)})
+                continue
+
+            if SmsLog.objects.filter(invoice=invoice, success=True, sentAt__gte=timezone.now() - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)).exists():
+                skipped.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'reason': 'Sent moments ago'})
+                continue
+
+            due_date = timezone.localdate() + timedelta(days=days)
+            message = build_message(invoice, public_link(invoice), due_date)
+            success, provider_response = send_sms(phone, message)
+
+            if not success:
+                SmsLog.objects.create(invoice=invoice, phone=phone, message=message, success=False, providerResponse=provider_response[:2000], sentBy=request.user)
+                skipped.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'reason': f'Send failed: {provider_response}'})
+                continue
+
+            previous_due, previous_status = invoice.dueDate, invoice.status
+            with transaction.atomic():
+                SmsLog.objects.create(invoice=invoice, phone=phone, message=message, success=True, providerResponse=provider_response[:2000], sentBy=request.user)
+                if invoice.status == 'overdue':
+                    invoice.status = 'pending_payment'
+                invoice.smsSentAt = timezone.now()
+                invoice.smsSendCount += 1
+                invoice.dueDate = due_date
+                invoice.save(update_fields=['status', 'smsSentAt', 'smsSendCount', 'dueDate', 'updatedAt'])
+                log_audit(invoice, 'SMS sent to bidder (bulk)', request.user, previous_value=previous_due, new_value=due_date,
+                          reason=f'Bulk SMS #{invoice.smsSendCount} to +{phone}; due in {days} days.', action_type='send_sms')
+            sent.append({'invoiceId': invoice_id, 'invoiceNumber': invoice.invoiceNumber, 'phone': phone, 'dueDate': str(due_date)})
+
+        return Response({'sent': sent, 'skipped': skipped})

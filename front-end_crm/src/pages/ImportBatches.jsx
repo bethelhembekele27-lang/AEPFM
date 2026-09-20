@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { money } from "../data";
 import { apiCall } from "../api";
+import SendSmsBulkModal from "../components/SendSmsBulkModal";
 
 export default function ImportBatches({ role, token }) {
   const canImport = role === "administrator" || role === "auction_manager";
@@ -21,6 +22,7 @@ export default function ImportBatches({ role, token }) {
   const [viewingBatch, setViewingBatch] = useState(null);
   const [batchInvoices, setBatchInvoices] = useState([]);
   const [selectedBatches, setSelectedBatches] = useState([]);
+  const [showSmsBulkModal, setShowSmsBulkModal] = useState(false);
 
   useEffect(() => {
     fetchBatches();
@@ -294,6 +296,17 @@ export default function ImportBatches({ role, token }) {
               <button className="modal-close" onClick={() => setViewingBatch(null)}>&times;</button>
             </div>
             <div className="modal-body">
+              <button className="btn btn-blue" style={{ marginBottom: 12 }} onClick={() => setShowSmsBulkModal(true)}>
+                Send SMS to all {batchInvoices.length} invoices in this batch
+              </button>
+              {showSmsBulkModal && (
+                <SendSmsBulkModal
+                  invoices={batchInvoices}
+                  token={token}
+                  onClose={() => setShowSmsBulkModal(false)}
+                  onDone={() => openBatchDetail(viewingBatch)}
+                />
+              )}
               <div className="tbl-wrap">
                 <table>
                   <thead><tr><th>Invoice #</th><th>Bidder</th><th>Total</th><th>Status</th></tr></thead>

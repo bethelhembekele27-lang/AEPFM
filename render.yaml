@@ -42,6 +42,9 @@ services:
         sync: false
       - key: TEXTBEE_DEVICE_ID
         sync: false
+      - key: CRON_SECRET
+        sync: false
+
 
   - type: web
     name: aepfm-frontend

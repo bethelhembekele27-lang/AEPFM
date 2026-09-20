@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AuctionViewSet, WinnerViewSet, InvoiceViewSet,
     AttachmentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
-    OfficeSettingsView,
+    OfficeSettingsView, ManualWinnerCreateView,
 )
 
 from .import_views import (
@@ -27,6 +27,7 @@ urlpatterns = [
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),
     path('fee-config/', FeeConfigView.as_view(), name='fee-config'),
     path('office-settings/', OfficeSettingsView.as_view(), name='office-settings'),
+    path('winners/manual/', ManualWinnerCreateView.as_view(), name='winner-manual-create'),
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),
     path('audit-logs/clear/', AuditLogClearView.as_view(), name='audit-log-clear'),  # <-- add
 

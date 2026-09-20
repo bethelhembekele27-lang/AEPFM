@@ -11,11 +11,19 @@ function smsParts(text) {
   return chars.length <= single ? 1 : Math.ceil(chars.length / multi);
 }
 
+// Client-side sanity check for the editable recipient field: loosely mirrors the
+// backend's normalize_phone, only to show a red hint. The server validates for real.
+function normalizeClientSide(raw) {
+  const digits = (raw || "").replace(/\D/g, "");
+  return digits.length >= 9;
+}
+
 export default function SendSms({ invoiceId, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [days, setDays] = useState("");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [touched, setTouched] = useState(false); // staff edited the message by hand
   const [step, setStep] = useState(1); // 1 = compose, 2 = review and send, 3 = result
@@ -38,6 +46,7 @@ export default function SendSms({ invoiceId, onBack }) {
       }
       setData(body);
       setDays(String(body.dueDays));
+      setPhone(body.rawPhone || "");
       if (replaceMessage) {
         setMessage(body.message);
         setTouched(false);
@@ -56,7 +65,7 @@ export default function SendSms({ invoiceId, onBack }) {
     try {
       const res = await apiCall(`/api/invoices/${invoiceId}/sms/send/`, {
         method: "POST",
-        body: JSON.stringify({ message, dueDays: Number(days) }),
+        body: JSON.stringify({ message, dueDays: Number(days), phone }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -90,7 +99,7 @@ export default function SendSms({ invoiceId, onBack }) {
   const daysSynced = String(data.dueDays) === String(days);
   const parts = smsParts(message);
   const linkMissing = !message.includes(data.link);
-  const canContinue = Boolean(data.phone) && daysValid && daysSynced && message.trim().length > 0;
+  const canContinue = Boolean(phone) && normalizeClientSide(phone) && daysValid && daysSynced && message.trim().length > 0;
   const testMode = data.backend === "console";
 
   return (
@@ -120,12 +129,15 @@ export default function SendSms({ invoiceId, onBack }) {
         <>
           <div className="field-grid">
             <div className="field">
-              <div className="fl">Recipient</div>
-              {data.phone ? (
-                <div className="fv mono">+{data.phone}</div>
-              ) : (
-                <div style={{ color: "var(--red)", fontSize: 13 }}>
-                  "{data.rawPhone}" is not a valid Ethiopian mobile number. Fix it on the winner record first.
+              <div className="fl">Recipient (editable)</div>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 0911234567"
+              />
+              {!normalizeClientSide(phone) && (
+                <div style={{ color: "var(--red)", fontSize: 12, marginTop: 4 }}>
+                  Doesn't look like a valid Ethiopian mobile number
                 </div>
               )}
             </div>
@@ -175,7 +187,7 @@ export default function SendSms({ invoiceId, onBack }) {
       {step === 2 && (
         <>
           <div className="field-grid">
-            <div className="field"><div className="fl">To</div><div className="fv mono">+{data.phone}</div></div>
+            <div className="field"><div className="fl">To</div><div className="fv mono">+{phone}</div></div>
             <div className="field"><div className="fl">Payment deadline</div><div className="fv mono">{data.dueDate} ({days} days)</div></div>
           </div>
           <div className="fl" style={{ marginBottom: 4 }}>This exact text will be sent</div>

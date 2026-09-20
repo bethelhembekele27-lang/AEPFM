@@ -59,7 +59,7 @@ export default function InvoiceDetailModal({ invoice, role, onClose, onGenerateP
             <div className="field"><div className="fl">Fee percentage</div><div className="fv mono">{invoice.feePercentage}%</div></div>
             <div className="field"><div className="fl">Invoice date</div><div className="fv mono">{invoice.invoiceDate}</div></div>
             <div className="field"><div className="fl">Due date</div><div className="fv mono">{invoice.dueDate}</div></div>
-            <div className="field"><div className="fl">Total amount</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
+            <div className="field"><div className="fl">Fee amount</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
             <div className="field"><div className="fl">Verified by</div><div className="fv">{invoice.verifiedBy}</div></div>
           </div>
 

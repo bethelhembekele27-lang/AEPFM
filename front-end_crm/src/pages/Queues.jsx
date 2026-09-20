@@ -87,7 +87,7 @@ export default function Queues({ role, token }) {
                 <th>Invoice #</th>
                 <th>Bidder</th>
                 <th>Company</th>
-                <th>Total amount</th>
+                <th>Fee amount</th>
                 <th>Due date</th>
                 <th>Status</th>
                 <th>Call center note</th>

@@ -485,3 +485,50 @@ class OfficeSettingsView(generics.GenericAPIView):
         OfficeSettings.objects.filter(isActive=True).update(isActive=False)
         config = OfficeSettings.objects.create(address=address, configuredBy=request.user, isActive=True)
         return Response(OfficeSettingsSerializer(config).data)
+
+
+class ManualWinnerCreateView(APIView):
+    """POST /api/winners/manual/ — one winner + invoice + lots, no Excel import."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not has_permission(request.user, 'generate_invoice'):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        bidder_name = request.data.get('bidderName', '').strip()
+        phone = request.data.get('winnerPhone', '').strip()
+        company_name = request.data.get('companyName', '').strip()
+        lots = request.data.get('lots', [])
+        due_date = request.data.get('dueDate') or (timezone.localdate() + timedelta(days=14))
+
+        if not bidder_name or not phone:
+            return Response({'error': 'Bidder name and phone are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not lots:
+            return Response({'error': 'At least one lot is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction
+        default_fee_pct = FeeConfig.get_active_percentage()
+        with transaction.atomic():
+            winner = Winner.objects.create(
+                bidderName=bidder_name, winnerPhone=phone, companyName=company_name,
+                winningAmount=sum(Decimal(str(l['winningAmount'])) for l in lots),
+            )
+            invoice = Invoice.objects.create(
+                winner=winner, invoiceNumber=self._next_invoice_number(),
+                invoiceDate=timezone.localdate(), dueDate=due_date, status='invoice_generated',
+            )
+            for lot in lots:
+                InvoiceLot.objects.create(
+                    invoice=invoice, lotNumber=lot.get('lotNumber', ''), auctionName=lot.get('auctionName', ''),
+                    winningAmount=Decimal(str(lot['winningAmount'])),
+                    feePercentage=Decimal(str(lot.get('feePercentage', default_fee_pct))),
+                )
+        return Response(InvoiceDetailSerializer(invoice).data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _next_invoice_number():
+        year = timezone.localdate().year
+        prefix = f'INV-{year}-'
+        existing = Invoice.objects.filter(invoiceNumber__startswith=prefix).values_list('invoiceNumber', flat=True)
+        nums = [int(n.rsplit('-', 1)[1]) for n in existing if n.rsplit('-', 1)[1].isdigit()]
+        return f'{prefix}{(max(nums) + 1 if nums else 1):03d}'
