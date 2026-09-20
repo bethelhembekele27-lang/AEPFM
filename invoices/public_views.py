@@ -26,6 +26,12 @@ MIN_PDF_SIZE = 5_000
 MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024
 MIN_RECEIPT_DIMENSION = 300
 
+ERROR_CODES = {
+    IMAGE_NOT_CLEAR_MESSAGE: 'image_not_clear',
+    FILE_NOT_VALID_MESSAGE: 'file_not_valid',
+    FILE_TOO_LARGE_MESSAGE: 'file_too_large',
+}
+
 
 class PublicPdfThrottle(AnonRateThrottle):
     scope = 'public_invoice_pdf'
@@ -160,17 +166,23 @@ class PublicReceiptUploadView(APIView):
 
         if invoice.status in ('paid', 'cancelled', 'waived'):
             return Response(
-                {'error': 'This invoice is already closed and cannot accept a new receipt.'},
+                {'error': 'This invoice is already closed and cannot accept a new receipt.', 'code': 'invoice_closed'},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
         receipt_file = request.FILES.get('receiptFile')
         if not receipt_file:
-            return Response({'receiptFile': ['This field is required.']}, status=http_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'This field is required.', 'code': 'file_required'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
 
         image_error = _validate_receipt_file(receipt_file)
         if image_error:
-            return Response({'error': image_error}, status=http_status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': image_error, 'code': ERROR_CODES.get(image_error, 'file_not_valid')},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
 
         # amountPaid / paymentMethod / paymentDate are no longer collected
         # from the bidder — defaulted here instead.
