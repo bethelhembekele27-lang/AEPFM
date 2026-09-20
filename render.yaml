@@ -22,6 +22,16 @@ services:
         sync: false
       - key: BOOTSTRAP_ADMIN_EMAIL
         sync: false
+      - key: B2_BUCKET_NAME
+        sync: false
+      - key: B2_ENDPOINT_URL
+        sync: false
+      - key: B2_REGION
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
 
   - type: web
     name: aepfm-frontend

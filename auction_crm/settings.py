@@ -126,6 +126,26 @@ STORAGES = {
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
 }
 
+# Durable private file storage (receipts, attachments, generated reports).
+# Uses Backblaze B2 through its S3-compatible API when B2_BUCKET_NAME is set;
+# falls back to local disk (MEDIA_ROOT) when it is not, so local dev needs nothing.
+if config("B2_BUCKET_NAME", default=""):
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": config("B2_BUCKET_NAME"),
+            "endpoint_url": config("B2_ENDPOINT_URL"),
+            "access_key": config("B2_KEY_ID"),
+            "secret_key": config("B2_APPLICATION_KEY"),
+            "region_name": config("B2_REGION", default=""),
+            "signature_version": "s3v4",
+            "default_acl": None,
+            "querystring_auth": True,
+            "querystring_expire": 300,
+            "file_overwrite": False,
+        },
+    }
+
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
     default='http://localhost:5173,http://localhost:3000'
