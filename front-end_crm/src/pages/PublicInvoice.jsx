@@ -1,16 +1,27 @@
 import { useState, useEffect } from "react";
-import { statusLabels, money } from "../data";
-import { apiCall } from "../api";
+import { money } from "../data";
+import { apiCall, API_BASE } from "../api";
 import logo from "../logo";
 
 const CLOSED_STATUSES = ["paid", "cancelled", "waived"];
 
-const PAYMENT_METHODS = [
-  { v: "bank_transfer", l: "Bank Transfer" },
-  { v: "telebirr", l: "Telebirr" },
-  { v: "cpo", l: "CPO" },
-  { v: "other", l: "Other" },
-];
+// TODO: have a native Amharic speaker review these before shipping to real bidders.
+const STATUS_LABELS_AM = {
+  invoice_generated: "ደረሰኝ ተዘጋጅቷል",
+  pending_payment: "ክፍያ በመጠባበቅ ላይ",
+  payment_submitted: "ደረሰኝ ገብቷል",
+  under_verification: "በማረጋገጥ ላይ",
+  paid: "ተከፍሏል",
+  overdue: "ጊዜው አልፏል",
+  cancelled: "ተሰርዟል",
+  waived: "ነፃ ተደርጓል",
+};
+
+const MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024; // mirrors public_views.py MAX_RECEIPT_FILE_SIZE
+
+function isLikelyPdf(file) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
 
 export default function PublicInvoice({ token }) {
   const [invoice, setInvoice] = useState(null);
@@ -18,9 +29,7 @@ export default function PublicInvoice({ token }) {
   const [loadError, setLoadError] = useState("");
 
   const [receiptFile, setReceiptFile] = useState(null);
-  const [amountPaid, setAmountPaid] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fileError, setFileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null); // { success, message } | null
   const [submitError, setSubmitError] = useState("");
@@ -35,17 +44,50 @@ export default function PublicInvoice({ token }) {
     try {
       const res = await apiCall(`/api/public/invoice/${token}/`, { method: "GET" });
       if (!res.ok) {
-        setLoadError(res.status === 404 ? "Invoice not found. Check the link and try again." : "Failed to load invoice.");
+        setLoadError(
+          res.status === 404
+            ? "ደረሰኝ አልተገኘም። እባክዎ አገናኙን ያረጋግጡ።"
+            : "ደረሰኙን መጫን አልተቻለም።"
+        );
         return;
       }
       const data = await res.json();
       setInvoice(data);
     } catch (err) {
-      setLoadError("Network error loading invoice.");
+      setLoadError("ደረሰኙን በመጫን ላይ የአውታረ መረብ ስህተት ተከስቷል።");
       console.error(err);
     } finally {
       setLoading(false);
     }
+  }
+
+  function validateFile(file) {
+    if (file.size > MAX_RECEIPT_FILE_SIZE) {
+      return "ፋይሉ በጣም ትልቅ ነው፣ እባክዎ ከ10MB ያነሰ ፋይል ይስቀሉ";
+    }
+    const isPdf = isLikelyPdf(file);
+    const isImage = file.type.startsWith("image/");
+    if (!isPdf && !isImage) {
+      return "ፋይሉ ትክክለኛ አይደለም፣ እባክዎ ትክክለኛ PDF ወይም ግልጽ ፎቶ ይስቀሉ";
+    }
+    return "";
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0] || null;
+    setFileError("");
+    if (!file) {
+      setReceiptFile(null);
+      return;
+    }
+    const err = validateFile(file);
+    if (err) {
+      setFileError(err);
+      setReceiptFile(null);
+      e.target.value = "";
+      return;
+    }
+    setReceiptFile(file);
   }
 
   async function handleSubmitReceipt(e) {
@@ -54,24 +96,15 @@ export default function PublicInvoice({ token }) {
     setSubmitResult(null);
 
     if (!receiptFile) {
-      setSubmitError("Please attach a receipt file.");
-      return;
-    }
-    if (!amountPaid) {
-      setSubmitError("Please enter the amount paid.");
-      return;
-    }
-    if (!paymentDate) {
-      setSubmitError("Please enter the payment date.");
+      setSubmitError("እባክዎ የክፍያ ደረሰኝ ፋይል ያያይዙ።");
       return;
     }
 
     setSubmitting(true);
     const formData = new FormData();
     formData.append("receiptFile", receiptFile);
-    formData.append("amountPaid", amountPaid);
-    formData.append("paymentMethod", paymentMethod);
-    formData.append("paymentDate", paymentDate);
+    // amountPaid / paymentMethod / paymentDate are deliberately NOT sent —
+    // the backend defaults these server-side (see public_views.py).
 
     try {
       const res = await apiCall(`/api/public/invoice/${token}/receipt/`, {
@@ -80,65 +113,62 @@ export default function PublicInvoice({ token }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        setSubmitError(data.error || data.detail || firstFieldError(data) || "Failed to submit receipt.");
+        setSubmitError(data.error || data.detail || "ደረሰኙን መላክ አልተቻለም።");
         return;
       }
       setSubmitResult(data);
       await fetchInvoice();
     } catch (err) {
-      setSubmitError("Network error submitting receipt.");
+      setSubmitError("ደረሰኙን በመላክ ላይ የአውታረ መረብ ስህተት ተከስቷል።");
       console.error(err);
     } finally {
       setSubmitting(false);
     }
   }
 
-  function firstFieldError(data) {
-    for (const key of Object.keys(data || {})) {
-      if (Array.isArray(data[key]) && data[key].length) return data[key][0];
-    }
-    return "";
-  }
+  const pdfUrl = `${API_BASE}/api/public/invoice/${token}/pdf/`;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", justifyContent: "center", padding: "32px 16px" }}>
-      <div style={{ width: "100%", maxWidth: 640 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <img src={logo} alt="Auction Ethiopia S.C." style={{ height: 46, width: "auto" }} />
+    <div style={{ minHeight: "100vh", background: "var(--paper)", display: "flex", justifyContent: "center", padding: "24px 12px" }}>
+      <div style={{ width: "100%", maxWidth: 560 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <img src={logo} alt="Auction Ethiopia S.C." style={{ height: 44, width: "auto" }} />
         </div>
 
         {loading && (
-          <div className="card" style={{ textAlign: "center", padding: 32 }}>Loading your invoice…</div>
+          <div className="card" style={{ textAlign: "center", padding: 28 }}>ደረሰኙን በመጫን ላይ…</div>
         )}
 
         {!loading && loadError && (
-          <div className="card" style={{ textAlign: "center", padding: 32, color: "var(--red)" }}>{loadError}</div>
+          <div className="card" style={{ textAlign: "center", padding: 28, color: "var(--red)" }}>{loadError}</div>
         )}
 
         {!loading && !loadError && invoice && (
           <>
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+            <div className="card" style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                 <div>
-                  <h2 style={{ margin: 0 }}>{invoice.invoiceNumber}</h2>
+                  <h2 style={{ margin: 0, fontSize: 18 }}>{invoice.invoiceNumber}</h2>
                   <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 2 }}>
                     {invoice.bidderName}{invoice.companyName ? ` · ${invoice.companyName}` : ""}
                   </div>
                 </div>
-                <span className={`stamp ${invoice.status}`}>{statusLabels[invoice.status] || invoice.status}</span>
+                <span className={`stamp ${invoice.status}`}>
+                  {STATUS_LABELS_AM[invoice.status] || invoice.status}
+                </span>
               </div>
 
-              <div className="field-grid" style={{ marginBottom: 4 }}>
-                <div className="field"><div className="fl">Invoice date</div><div className="fv mono">{invoice.invoiceDate}</div></div>
-                <div className="field"><div className="fl">Due date</div><div className="fv mono">{invoice.dueDate}</div></div>
-                <div className="field"><div className="fl">Total amount</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
+              <div className="field-grid" style={{ marginBottom: 2 }}>
+                <div className="field"><div className="fl">የደረሰኝ ቀን</div><div className="fv mono">{invoice.invoiceDate}</div></div>
+                <div className="field"><div className="fl">የመክፈያ ቀነ ገደብ</div><div className="fv mono">{invoice.dueDate}</div></div>
+                <div className="field"><div className="fl">ጠቅላላ መጠን</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
               </div>
 
-              <div className="section-label">Lots ({invoice.lots?.length || 0})</div>
-              <div className="tbl-wrap">
+              <div className="section-label">ሎቶች ({invoice.lots?.length || 0})</div>
+              <div className="tbl-wrap" style={{ marginBottom: 12 }}>
                 <div style={{ overflowX: "auto" }}>
                   <table>
-                    <thead><tr><th>Lot #</th><th>Auction</th><th>Winning amount</th><th>Fee %</th><th>Lot fee</th></tr></thead>
+                    <thead><tr><th>ሎት #</th><th>ጨረታ</th><th>ያሸነፉት መጠን</th><th>ክፍያ %</th><th>የክፍያ መጠን</th></tr></thead>
                     <tbody>
                       {(invoice.lots || []).map((l) => (
                         <tr key={l.id || l.lotNumber}>
@@ -153,76 +183,53 @@ export default function PublicInvoice({ token }) {
                   </table>
                 </div>
               </div>
+
+              <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="btn btn-brass" style={{ display: "inline-block", textDecoration: "none", textAlign: "center", width: "100%" }}>
+                ደረሰኝ (PDF) ይመልከቱ
+              </a>
             </div>
 
             {CLOSED_STATUSES.includes(invoice.status) ? (
               <div className="card" style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>This invoice is closed</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>ይህ ደረሰኝ ተዘግቷል</div>
                 <div className="locked-note" style={{ marginTop: 0 }}>
-                  No further action is needed — this invoice is marked {(statusLabels[invoice.status] || invoice.status).toLowerCase()}.
+                  ተጨማሪ እርምጃ አያስፈልግም — ደረሰኙ {STATUS_LABELS_AM[invoice.status] || invoice.status} ተብሎ ተመዝግቧል።
                 </div>
               </div>
             ) : submitResult?.success ? (
               <div className="card" style={{ textAlign: "center" }}>
                 <div className="login-success" style={{ display: "inline-block" }}>
-                  {submitResult.message || "Receipt received. It will be reviewed shortly."}
+                  {submitResult.message || "ደረሰኙ ደርሶናል። በቅርቡ ይታያል።"}
                 </div>
               </div>
             ) : (
               <div className="card">
-                <h3 style={{ margin: "0 0 4px" }}>Upload your payment receipt</h3>
-                <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 16 }}>
-                  Attach a photo or PDF of your bank slip or transfer confirmation, and enter the payment details below.
+                <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>የክፍያ ደረሰኝዎን ይስቀሉ</h3>
+                <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 14 }}>
+                  የባንክ ደረሰኝ ወይም የገንዘብ ማስተላለፊያ ማረጋገጫ ፎቶ ወይም PDF ያያይዙ።
                 </div>
                 <form onSubmit={handleSubmitReceipt}>
-                  <div className="upload-form">
-                    <div className="full">
-                      <label>Receipt file <span className="req">*</span></label>
-                      <div
-                        className="filedrop"
-                        onClick={() => document.getElementById("public-receipt-input")?.click()}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {receiptFile ? receiptFile.name : "Click to choose a file — image or PDF"}
-                        <input
-                          id="public-receipt-input"
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                          style={{ display: "none" }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label>Amount paid <span className="req">*</span></label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={amountPaid}
-                        onChange={(e) => setAmountPaid(e.target.value)}
-                        placeholder="e.g. 22400.00"
-                      />
-                    </div>
-                    <div>
-                      <label>Payment method <span className="req">*</span></label>
-                      <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                        {PAYMENT_METHODS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label>Payment date <span className="req">*</span></label>
-                      <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-                    </div>
+                  <div
+                    className="filedrop"
+                    onClick={() => document.getElementById("public-receipt-input")?.click()}
+                    style={{ cursor: "pointer", marginBottom: 10 }}
+                  >
+                    {receiptFile ? receiptFile.name : "ፋይል ለመምረጥ እዚህ ይጫኑ — ፎቶ ወይም PDF"}
+                    <input
+                      id="public-receipt-input"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={handleFileChange}
+                      style={{ display: "none" }}
+                    />
                   </div>
 
-                  {submitError && <div style={{ color: "var(--red)", marginTop: 10, fontSize: 12.5 }}>{submitError}</div>}
+                  {fileError && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 12.5 }}>{fileError}</div>}
+                  {submitError && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 12.5 }}>{submitError}</div>}
 
-                  <div style={{ marginTop: 16 }}>
-                    <button type="submit" className="btn btn-brass" disabled={submitting}>
-                      {submitting ? "Submitting…" : "Submit receipt"}
-                    </button>
-                  </div>
+                  <button type="submit" className="btn btn-brass" style={{ width: "100%" }} disabled={submitting || !receiptFile}>
+                    {submitting ? "በመላክ ላይ…" : "ደረሰኝ ላክ"}
+                  </button>
                 </form>
               </div>
             )}
