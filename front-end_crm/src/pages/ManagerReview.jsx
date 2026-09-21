@@ -109,6 +109,14 @@ export default function ManagerReview({ role, token }) {
         {selected.length > 0 && (
           <span style={{ fontSize: 12.5, color: "var(--text-2)" }}>{selected.length} selected</span>
         )}
+        {selected.length === 1 && (() => {
+          const row = rows.find((r) => r.id === selected[0]);
+          return row?.receiptUrl ? (
+            <a href={fileUrl(row.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+              View receipt
+            </a>
+          ) : null;
+        })()}
         <button className="btn btn-brass" onClick={() => openReview("approve")} disabled={selected.length === 0}>
           Approve selected
         </button>
@@ -135,13 +143,12 @@ export default function ManagerReview({ role, token }) {
                 <th>Phone</th>
                 <th>Amount</th>
                 <th>Submitted</th>
-                <th>Receipt</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>
+                  <td colSpan={6} style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>
                     Nothing pending review
                   </td>
                 </tr>
@@ -160,12 +167,6 @@ export default function ManagerReview({ role, token }) {
                   <td className="mono">{p.winnerPhone}</td>
                   <td className="amount">{money(p.amountPaid)}</td>
                   <td className="mono">{new Date(p.uploadedAt).toLocaleString()}</td>
-                  <td>
-                    {p.receiptUrl
-                      ? <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View</a>
-                      : <span style={{ color: "var(--text-3)" }}>—</span>
-                    }
-                  </td>
                 </tr>
               ))}
             </tbody>
