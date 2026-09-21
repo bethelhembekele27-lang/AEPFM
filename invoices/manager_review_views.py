@@ -36,7 +36,7 @@ class PendingReceiptsView(APIView):
 
         # Import here to avoid a circular-import at module level
         from .serializers import ManagerPaymentSerializer
-        return Response(ManagerPaymentSerializer(qs, many=True).data)
+        return Response(ManagerPaymentSerializer(qs, many=True, context={'request': request}).data)
 
 
 class ReceiptReviewView(APIView):
@@ -139,4 +139,4 @@ class ReceiptReviewView(APIView):
                 send_sms(phone, message)
 
         from .serializers import ManagerPaymentSerializer
-        return Response(ManagerPaymentSerializer(payment).data)
+        return Response(ManagerPaymentSerializer(payment, context={'request': request}).data)
