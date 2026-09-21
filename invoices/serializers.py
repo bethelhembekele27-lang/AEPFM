@@ -329,3 +329,43 @@ class OfficeSettingsSerializer(serializers.ModelSerializer):
 
     def get_configuredBy(self, obj):
         return user_display_name(obj.configuredBy)
+
+
+# ------------------------------------------ Manager receipt-review queue
+
+class ManagerPaymentSerializer(PaymentSerializer):
+    """
+    Extended PaymentSerializer for the manager receipt-review queue.
+    Adds the signed receipt URL plus the invoice/winner fields the queue
+    table needs to display — scoped to this serializer so the base
+    PaymentSerializer never leaks receiptFile to Viewer or Finance roles.
+    """
+    receiptUrl = serializers.SerializerMethodField()
+    invoiceNumber = serializers.CharField(source='invoice.invoiceNumber', read_only=True)
+    bidderName = serializers.CharField(source='invoice.winner.bidderName', read_only=True)
+    winnerPhone = serializers.CharField(source='invoice.winner.winnerPhone', read_only=True)
+    managerVerifiedBy = serializers.SerializerMethodField()
+
+    class Meta(PaymentSerializer.Meta):
+        fields = PaymentSerializer.Meta.fields + [
+            'receiptUrl',
+            'invoiceNumber',
+            'bidderName',
+            'winnerPhone',
+            'verificationStatus',
+            'managerNote',
+            'managerVerifiedBy',
+            'managerVerifiedDate',
+            'submittedViaPublicLink',
+        ]
+
+    def get_receiptUrl(self, obj):
+        if not obj.receiptFile:
+            return None
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(obj.receiptFile.url)
+        return obj.receiptFile.url
+
+    def get_managerVerifiedBy(self, obj):
+        return user_display_name(obj.managerVerifiedBy)

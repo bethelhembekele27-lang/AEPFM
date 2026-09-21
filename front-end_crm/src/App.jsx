@@ -15,6 +15,7 @@ import AuditTrail from "./pages/AuditTrail";
 import CallCenter from "./pages/CallCenter";
 import Employees from "./pages/Employees";
 import SendSms from "./pages/SendSms";
+import ManagerReview from "./pages/ManagerReview";
 
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -115,7 +116,8 @@ export default function App() {
           {page === "dashboard" && <Dashboard role={session.role} token={session.token} />}
           {page === "queues" && <Queues role={session.role} token={session.token} />}
           {page === "reports" && <Reports role={session.role} token={session.token} />}
-          {page === "callcenter" && <CallCenter role={session.role} token={session.token} />} 
+          {page === "callcenter" && <CallCenter role={session.role} token={session.token} />}
+          {page === "receipts" && <ManagerReview role={session.role} token={session.token} />}
           {page === "audit" && <AuditTrail role={session.role} token={session.token} />}
           {page === "employees" && <Employees role={session.role} token={session.token} />}
         </div>  

@@ -130,14 +130,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         def received_since(start_date):
             return (
-                InvoiceLot.objects.filter(
-                    invoice__status='paid',
-                    invoice__updatedAt__date__gte=start_date
-                ).aggregate(t=Sum('lotFee'))['t'] or 0
+                Payment.objects.filter(
+                    paymentStatus='verified',
+                    verifiedDate__date__gte=start_date,
+                ).aggregate(t=Sum('amountPaid'))['t'] or 0
             )
+        year_start = today.replace(month=1, day=1)
         today_collected = received_since(today)
         week_collected = received_since(week_start)
         month_collected = received_since(month_start)
+        year_collected = received_since(year_start)
 
         revenue_by_auction = [
             {'auctionName': r['auctionName'], 'total': str(r['total']), 'count': r['count']}
@@ -181,6 +183,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'paymentsReceivedToday': str(today_collected),
             'paymentsReceivedThisWeek': str(week_collected),
             'paymentsReceivedThisMonth': str(month_collected),
+            'paymentsReceivedThisYear': str(year_collected),
             'revenueByAuction': revenue_by_auction,
             'revenueByClient': revenue_by_client,
         })

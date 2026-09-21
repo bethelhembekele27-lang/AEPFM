@@ -6,6 +6,7 @@ from .views import (
     AttachmentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
     OfficeSettingsView, ManualWinnerCreateView,
 )
+from .manager_review_views import PendingReceiptsView, ReceiptReviewView
 
 from .import_views import (
     ImportBatchViewSet, ImportBatchPreviewView, ImportBatchConfirmView,
@@ -30,6 +31,9 @@ urlpatterns = [
     path('winners/manual/', ManualWinnerCreateView.as_view(), name='winner-manual-create'),
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),
     path('audit-logs/clear/', AuditLogClearView.as_view(), name='audit-log-clear'),  # <-- add
+
+    path('receipts/', PendingReceiptsView.as_view(), name='receipts-pending'),
+    path('receipts/<int:payment_id>/review/', ReceiptReviewView.as_view(), name='receipt-review'),
 
     path('', include(router.urls)),
 ]

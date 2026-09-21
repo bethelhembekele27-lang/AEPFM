@@ -31,6 +31,7 @@ export const navItems = [
   { key: "queues", label: "Operational queues", sub: "" },
   { key: "reports", label: "Reports", sub: "" },
   { key: "callcenter", label: "Call center" },
+  { key: "receipts", label: "Receipt verification", sub: "" },
   { key: "audit", label: "Audit trail", sub: "" },
   { key: "employees", label: "Employees" },
 ];
@@ -45,6 +46,7 @@ export const pagePermissions = {
   queues: ["administrator", "auction_manager", "finance_manager"],
   reports: ["administrator"],
   callcenter: null,
+  receipts: ["administrator", "auction_manager"],
   audit: ["administrator", "finance_manager"],
   employees: ["administrator"],
 };
