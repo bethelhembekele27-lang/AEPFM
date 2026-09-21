@@ -1,75 +1,266 @@
-import { useState } from "react";
-import { LOCKED_STATUSES, PDF_ROLES, actionDefsFor, batchLabel, money } from "../data";
+import { useState, useEffect } from "react";
+import { LOCKED_STATUSES, PDF_ROLES, money } from "../data";
+import { apiCall, API_BASE } from "../api";
 import Stamp from "./Stamp";
-import { ActionBtn } from "./ActionButton";
 import GeneratePdfModal from "./GeneratePdfModal";
 
-const FIELD_SOURCE_DEFS = [
-  { key: "lotNumber", label: "Lot Number" },
-  { key: "auctionName", label: "Auction" },
-  { key: "winningAmount", label: "Amount" },
-  { key: "bidderName", label: "Bidder Name" },
-  { key: "winnerPhone", label: "Phone" },
-  { key: "status", label: "Status" },
-  { key: "companyName", label: "Company / Legal Name" },
-  { key: "initialPrice", label: "Initial Price" },
-  { key: "cpoAmount", label: "CPO Amount" },
-  { key: "cpoBank", label: "CPO Bank" },
-  { key: "submittedAt", label: "Submitted / Received Date" },
+const DOC_TYPES = [
+  { v: "bank_slip", l: "Bank Slip" },
+  { v: "transfer_proof", l: "Transfer Proof" },
+  { v: "cpo", l: "CPO Document" },
+  { v: "invoice", l: "Invoice Document" },
+  { v: "payment_confirmation", l: "Payment Confirmation" },
+  { v: "supporting_document", l: "Supporting Document" },
+  { v: "other", l: "Other" },
 ];
 
-export default function InvoiceDetailModal({ invoice, role, onClose, onGeneratePdf }) {
-  const [showGenerate, setShowGenerate] = useState(false);
-  if (!invoice) return null;
-  const locked = LOCKED_STATUSES.includes(invoice.status);
-  const canGeneratePdf = PDF_ROLES.includes(role) && !LOCKED_STATUSES.includes(invoice.status);
-  const otherActions = actionDefsFor(invoice).filter((b) => b.label !== "Generate invoice PDF");
+function fileUrl(path) {
+  if (!path) return "";
+  return path.startsWith("http") ? path : `${API_BASE}${path}`;
+}
 
-  const extraDataRows = (invoice.lots || []).flatMap((l) =>
-    Object.entries(l.extraFields || {}).map(([key, value]) => ({
-      lotNumber: l.lotNumber,
-      key,
-      value,
-    }))
+export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) {
+  const [invoice, setInvoice] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showGenerate, setShowGenerate] = useState(false);
+
+  const [attachments, setAttachments] = useState([]);
+  const [docType, setDocType] = useState("other");
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  const canUpload = role === "administrator" || role === "auction_manager";
+  const canDelete = role === "administrator";
+  const canEdit = role === "administrator";
+
+  useEffect(() => {
+    if (invoiceId) fetchInvoice();
+  }, [invoiceId]);
+
+  async function fetchInvoice() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await apiCall(`/api/invoices/${invoiceId}/`, {
+        headers: token ? { Authorization: `Token ${token}` } : {},
+      });
+      if (!res.ok) { setError("Failed to load invoice"); return; }
+      const data = await res.json();
+      setInvoice(data);
+      setEditName(data.bidderName);
+      setEditCompany(data.companyName || "");
+      setEditPhone(data.winnerPhone || "");
+      setEditRemarks(data.remarks || "");
+      fetchAttachments();
+    } catch (err) {
+      setError("Network error loading invoice");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchAttachments() {
+    try {
+      const res = await apiCall(`/api/invoices/${invoiceId}/attachments/`, {
+        headers: token ? { Authorization: `Token ${token}` } : {},
+      });
+      if (res.ok) setAttachments(await res.json());
+    } catch (err) {
+      console.error("Failed to load attachments", err);
+    }
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("filePath", file);
+    formData.append("fileName", file.name);
+    formData.append("fileExtension", file.name.includes(".") ? file.name.split(".").pop() : "");
+    formData.append("fileSize", (file.size / 1024).toFixed(2));
+    formData.append("documentType", docType);
+    try {
+      const res = await apiCall(`/api/invoices/${invoiceId}/attachments/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Token ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) { window.alert("Upload failed."); return; }
+      setFile(null);
+      await fetchAttachments();
+    } catch (err) {
+      window.alert("Network error uploading file.");
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDeleteAttachment(id) {
+    if (!window.confirm("Delete this attachment permanently?")) return;
+    try {
+      const res = await apiCall(`/api/attachments/${id}/`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Token ${token}` } : {},
+      });
+      if (res.ok) await fetchAttachments();
+      else window.alert("Failed to delete attachment.");
+    } catch (err) {
+      window.alert("Network error deleting attachment.");
+      console.error(err);
+    }
+  }
+
+  async function handleSaveEdit() {
+    setEditError("");
+    setSaving(true);
+    try {
+      const winnerRes = await apiCall(`/api/winners/${invoice.winner.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: JSON.stringify({ bidderName: editName, companyName: editCompany, winnerPhone: editPhone }),
+      });
+      if (!winnerRes.ok) { setEditError("Failed to save bidder info."); return; }
+
+      const invRes = await apiCall(`/api/invoices/${invoiceId}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: JSON.stringify({ remarks: editRemarks }),
+      });
+      if (!invRes.ok) { setEditError("Failed to save remarks."); return; }
+
+      setEditing(false);
+      await fetchInvoice();
+    } catch (err) {
+      setEditError("Network error saving changes.");
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleGeneratePdf(formData) {
+    const invId = invoiceId;
+    const pct = formData.percentagesByInvId[invId];
+    const amhName = formData.amhNames[invId] || "";
+    try {
+      const res = await fetch(`${API_BASE}/api/invoices/${invId}/generate-pdf/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Token ${token}` },
+        body: JSON.stringify({
+          feePercentage: parseFloat(pct),
+          auctionRefNumber: formData.auctionRefNumber || "",
+          bidderNameAmharic: amhName,
+          amountInWords: (formData.amountWordsByInv || {})[invId] || "",
+          feeInWords: (formData.feeWordsByInv || {})[invId] || "",
+          officeAddress: formData.officeAddress || "",
+          totalAmount: (formData.totalAmountByInv || {})[invId] || "",
+          feeAmount: (formData.feeAmountByInv || {})[invId] || "",
+          bankAccount: (formData.bankAccountByInv || {})[invId] || "",
+          paragraph1: (formData.paragraph1ByInv || {})[invId] || "",
+          paragraph2: (formData.paragraph2ByInv || {})[invId] || "",
+        }),
+      });
+      if (!res.ok) { window.alert("PDF generation failed."); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice_${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      await fetchInvoice();
+    } catch (err) {
+      window.alert("Network error generating PDF.");
+      console.error(err);
+    }
+  }
+
+  if (!invoiceId) return null;
+  if (loading) return (
+    <div className="overlay active"><div className="modal" style={{ padding: 40, textAlign: "center" }}>Loading...</div></div>
+  );
+  if (error || !invoice) return (
+    <div className="overlay active" onClick={onClose}>
+      <div className="modal" style={{ padding: 40, textAlign: "center", color: "var(--red)" }}>{error || "Not found"}</div>
+    </div>
   );
 
-  const columnMapping = invoice.columnMapping;
+  const locked = LOCKED_STATUSES.includes(invoice.status);
+  const canGeneratePdf = PDF_ROLES.includes(role) && !locked;
 
   return (
     <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
         <div className="modal-head">
           <div>
-            <h2 style={{ margin: 0 }}>{invoice.inv}</h2>
+            <h2 style={{ margin: 0 }}>{invoice.invoiceNumber}</h2>
             <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 2 }}>
-              {batchLabel(invoice.batchId)} \u00b7 {invoice.lots.length} lot(s)
+              {invoice.lots.length} lot(s){invoice.importBatch ? ` · Batch #${invoice.importBatch}` : ""}
             </div>
           </div>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
             <Stamp status={invoice.status} />
-            {locked && <span className="badge-note">Locked \u2014 no edits except admin override</span>}
-          </div>
-          <div className="field-grid">
-            <div className="field"><div className="fl">Bidder</div><div className="fv">{invoice.bidderName}</div></div>
-            <div className="field"><div className="fl">Company</div><div className="fv">{invoice.companyName || <span style={{ color: "var(--text-3)" }}>Not set \u2014 edit winner record to add</span>}</div></div>
-            <div className="field"><div className="fl">Phone</div><div className="fv mono">{invoice.winnerPhone}</div></div>
-            <div className="field"><div className="fl">Fee percentage</div><div className="fv mono">{invoice.feePercentage}%</div></div>
-            <div className="field"><div className="fl">Invoice date</div><div className="fv mono">{invoice.invoiceDate}</div></div>
-            <div className="field"><div className="fl">Due date</div><div className="fv mono">{invoice.dueDate}</div></div>
-            <div className="field"><div className="fl">Fee amount</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
-            <div className="field"><div className="fl">Verified by</div><div className="fv">{invoice.verifiedBy}</div></div>
+            {locked && <span className="badge-note">Locked — no edits except admin override</span>}
           </div>
 
+          {editing ? (
+            <div className="card" style={{ background: "var(--paper)", marginBottom: 16 }}>
+              <div className="section-label" style={{ marginTop: 0 }}>Edit bidder info & remarks</div>
+              <div className="field-grid">
+                <div className="field"><div className="fl">Bidder name</div><input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
+                <div className="field"><div className="fl">Company</div><input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} /></div>
+                <div className="field"><div className="fl">Phone</div><input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} /></div>
+              </div>
+              <div className="field" style={{ marginBottom: 14 }}>
+                <div className="fl">Remarks</div>
+                <textarea value={editRemarks} onChange={(e) => setEditRemarks(e.target.value)} rows={3} style={{ width: "100%", fontFamily: "'Inter'", fontSize: 14, padding: 10, border: "1px solid var(--border)", borderRadius: 6 }} />
+              </div>
+              {editError && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 13 }}>{editError}</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-brass" onClick={handleSaveEdit} disabled={saving}>{saving ? "Saving..." : "Save changes"}</button>
+                <button className="btn btn-ghost" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div className="field-grid">
+              <div className="field"><div className="fl">Bidder</div><div className="fv">{invoice.bidderName}</div></div>
+              <div className="field"><div className="fl">Company</div><div className="fv">{invoice.companyName || <span style={{ color: "var(--text-3)" }}>Not set</span>}</div></div>
+              <div className="field"><div className="fl">Phone</div><div className="fv mono">{invoice.winnerPhone}</div></div>
+              <div className="field"><div className="fl">Fee percentage</div><div className="fv mono">{invoice.feePercentage}%</div></div>
+              <div className="field"><div className="fl">Invoice date</div><div className="fv mono">{invoice.invoiceDate}</div></div>
+              <div className="field"><div className="fl">Due date</div><div className="fv mono">{invoice.dueDate}</div></div>
+              <div className="field"><div className="fl">Fee amount</div><div className="fv mono">{money(invoice.totalAmount)}</div></div>
+              <div className="field"><div className="fl">Verified by</div><div className="fv">{invoice.verifiedBy || "—"}</div></div>
+            </div>
+          )}
+
+          {canEdit && !editing && (
+            <button className="btn btn-sm" style={{ marginBottom: 16 }} onClick={() => setEditing(true)}>Edit invoice</button>
+          )}
+
           <div className="section-label">Lots ({invoice.lots.length})</div>
-          <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+          <div className="tbl-wrap" style={{ marginBottom: 16 }}>
             <table>
               <thead><tr><th>Lot #</th><th>Auction</th><th>Winning amount</th><th>Fee %</th><th>Lot fee</th></tr></thead>
               <tbody>
                 {invoice.lots.map((l) => (
-                  <tr key={l.lotNumber}>
+                  <tr key={l.id}>
                     <td className="mono">{l.lotNumber}</td>
                     <td>{l.auctionName}</td>
                     <td className="amount">{money(l.winningAmount)}</td>
@@ -81,54 +272,30 @@ export default function InvoiceDetailModal({ invoice, role, onClose, onGenerateP
             </table>
           </div>
 
-          {columnMapping && (
-            <>
-              <div className="section-label">Field sources</div>
-              <div className="tbl-wrap" style={{ marginBottom: 6 }}>
-                <table>
-                  <thead><tr><th>Field</th><th>Source column in uploaded file</th></tr></thead>
-                  <tbody>
-                    {FIELD_SOURCE_DEFS.map((f) => {
-                      const source = columnMapping[f.key];
-                      return (
-                        <tr key={f.key}>
-                          <td>{f.label}</td>
-                          <td className={source ? "mono" : ""} style={!source ? { color: "var(--text-3)", fontStyle: "italic" } : undefined}>
-                            {source || "Not present in file"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          <div className="section-label">Attachments</div>
+          <div className="attach-list" style={{ marginBottom: 12 }}>
+            {attachments.length === 0 && <div className="locked-note" style={{ marginTop: 0 }}>No attachments yet.</div>}
+            {attachments.map((a) => (
+              <div key={a.id} className="attach-item" style={{ justifyContent: "space-between" }}>
+                <a href={fileUrl(a.filePath)} target="_blank" rel="noopener noreferrer" style={{ color: "var(--brass-dark)" }}>
+                  {a.fileName} <span style={{ color: "var(--text-3)", fontWeight: 400 }}>({a.documentType})</span>
+                </a>
+                {canDelete && (
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteAttachment(a.id)}>Delete</button>
+                )}
               </div>
-              <div className="locked-note" style={{ marginBottom: 14 }}>
-                Shows which column in the originally uploaded spreadsheet supplied each field for this batch.
-              </div>
-            </>
-          )}
-
-          {extraDataRows.length > 0 && (
-            <>
-              <div className="section-label">Additional imported data</div>
-              <div className="tbl-wrap" style={{ marginBottom: 6 }}>
-                <table>
-                  <thead><tr><th>Lot #</th><th>Field</th><th>Value</th></tr></thead>
-                  <tbody>
-                    {extraDataRows.map((row, i) => (
-                      <tr key={`${row.lotNumber}-${row.key}-${i}`}>
-                        <td className="mono">{row.lotNumber}</td>
-                        <td>{row.key}</td>
-                        <td>{String(row.value)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="locked-note" style={{ marginBottom: 14 }}>
-                Columns from the original spreadsheet that don't map to a standard invoice field \u2014 kept for reference.
-              </div>
-            </>
+            ))}
+          </div>
+          {canUpload && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+              <select className="select-standalone" style={{ maxWidth: 200 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {DOC_TYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
+              </select>
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ maxWidth: 220 }} />
+              <button className="btn btn-sm btn-brass" onClick={handleUpload} disabled={!file || uploading}>
+                {uploading ? "Uploading..." : "Upload"}
+              </button>
+            </div>
           )}
 
           <div className="field" style={{ margin: "16px 0" }}>
@@ -136,33 +303,20 @@ export default function InvoiceDetailModal({ invoice, role, onClose, onGenerateP
             <div className="fv">{invoice.remarks || <span style={{ color: "var(--text-3)" }}>No remarks added</span>}</div>
           </div>
 
-          <div className="section-label">Attachments</div>
-          <div className="attach-list">
-            <div className="attach-item"><span className="ic"></span> Invoice document \u2014 {invoice.inv}.pdf</div>
-            {["paid", "under_verification", "payment_submitted"].includes(invoice.status) && (
-              <div className="attach-item"><span className="ic"></span> Bank slip / transfer proof \u2014 receipt_{invoice.inv}.pdf</div>
-            )}
-          </div>
-
           <div className="modal-actions">
-            {canGeneratePdf && (
-              <button className="btn btn-sm" onClick={() => setShowGenerate(true)}>Generate invoice PDF</button>
-            )}
-            {otherActions.map((b, i) => (
-              <ActionBtn key={i} label={b.label} roles={b.roles} role={role} />
-            ))}
+            {canGeneratePdf && <button className="btn btn-sm" onClick={() => setShowGenerate(true)}>Generate invoice PDF</button>}
           </div>
           {locked && (
             <div className="locked-note">
-              Action buttons are hidden once an invoice is Paid, Cancelled, or Waived \u2014 only an Administrator override can change status from here.
+              Action buttons are hidden once an invoice is Paid, Cancelled, or Waived — only an Administrator override can change status.
             </div>
           )}
         </div>
       </div>
       {showGenerate && (
         <GeneratePdfModal
-          invoices={[invoice]}
-          onConfirm={onGeneratePdf}
+          invoices={[{ id: invoiceId, invoiceNumber: invoice.invoiceNumber, bidderName: invoice.bidderName, bidderNameAmharic: "", lots: invoice.lots }]}
+          onConfirm={handleGeneratePdf}
           onClose={() => setShowGenerate(false)}
         />
       )}

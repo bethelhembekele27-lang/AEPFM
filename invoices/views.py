@@ -40,8 +40,12 @@ class AuctionViewSet(viewsets.ModelViewSet):
 class WinnerViewSet(viewsets.ModelViewSet):
     queryset = Winner.objects.select_related('auction', 'importBatch').order_by('-createdAt')
     serializer_class = WinnerSerializer
-    permission_classes = [IsAuthenticated, ReadOnlyForViewer]
+    permission_classes = [IsAuthenticated, ReadOnlyForViewer, ActionPermissionMap]
     pagination_class = StandardPagination
+    action_permissions = {
+        'update': 'edit_invoice',
+        'partial_update': 'edit_invoice',
+    }
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):

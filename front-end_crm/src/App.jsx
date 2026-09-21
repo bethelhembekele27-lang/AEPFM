@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { invoicesSeed, canAccessPage, getDefaultPage } from "./data";
+import { canAccessPage, getDefaultPage } from "./data";
 import "./styles.css";
-import PublicInvoice from "./pages/PublicInvoice";
 import Login from "./components/Login";
 import Header from "./components/Header";
 import InvoiceDetailModal from "./components/InvoiceDetailModal";
@@ -18,12 +17,7 @@ import Employees from "./pages/Employees";
 import SendSms from "./pages/SendSms";
 
 export default function App() {
-  const publicInvoiceMatch = window.location.pathname.match(/^\/invoice\/([^/]+)\/?$/);
-  if (publicInvoiceMatch) {
-    return <PublicInvoice token={publicInvoiceMatch[1]} />;
-  }    
   const [page, setPage] = useState("dashboard");
-  // ...rest of your existing code stays exactly the same below this
   const [session, setSession] = useState(() => {
     const sessionToken = sessionStorage.getItem("authToken");
     const localToken = localStorage.getItem("authToken");
@@ -54,37 +48,14 @@ export default function App() {
   });
   const [theme, setTheme] = useState("light");
   const [showAccountSettings, setShowAccountSettings] = useState(false);
-  const [invoices, setInvoices] = useState(invoicesSeed);
-  const [detailInvNumber, setDetailInvNumber] = useState(null);
+  const [detailInvoiceId, setDetailInvoiceId] = useState(null);
   const [smsInvoiceId, setSmsInvoiceId] = useState(null);
-  const detailInvoice = invoices.find((inv) => inv.inv === detailInvNumber) || null;
 
   useEffect(() => {
     if (session && !canAccessPage(page, session.role)) {
       setPage(getDefaultPage(session.role));
     }
   }, [session]);
-
-  function generateInvoicePdfs(percentagesByInv) {
-    setInvoices((prev) => prev.map((inv) => {
-      if (!(inv.inv in percentagesByInv)) return inv;
-      const pct = parseFloat(percentagesByInv[inv.inv]);
-      if (isNaN(pct)) return inv;
-      const lots = inv.lots.map((l) => ({
-        ...l,
-        feePercentage: pct.toFixed(2),
-        lotFee: (parseFloat(l.winningAmount) * pct / 100).toFixed(2),
-      }));
-      const totalAmount = lots.reduce((s, l) => s + parseFloat(l.lotFee), 0).toFixed(2);
-      return {
-        ...inv,
-        lots,
-        feePercentage: pct.toFixed(2),
-        totalAmount,
-        status: inv.status === "invoice_generated" ? "pending_payment" : inv.status,
-      };
-    }));
-  }
 
   function handleLogout() {
     sessionStorage.removeItem("authToken");
@@ -93,7 +64,7 @@ export default function App() {
 
     setSession(null);
     setPage("dashboard");
-    setDetailInvNumber(null);
+    setDetailInvoiceId(null);
   }
 
   function handleLogin(role, username, token, remember) {
@@ -134,7 +105,7 @@ export default function App() {
             <Operations
               role={session.role}
               token={session.token}
-              onOpenDetail={setDetailInvNumber}
+              onOpenDetail={setDetailInvoiceId}
               onOpenSms={setSmsInvoiceId}
             />
           )}
@@ -150,11 +121,10 @@ export default function App() {
         </div>  
       </div>
       <InvoiceDetailModal
-          invoice={detailInvoice}
+          invoiceId={detailInvoiceId}
           role={session.role}
           token={session.token}
-          onClose={() => setDetailInvNumber(null)}
-          onGeneratePdf={generateInvoicePdfs}
+          onClose={() => setDetailInvoiceId(null)}
         />
       {showAccountSettings && (
         <AccountSettingsModal
