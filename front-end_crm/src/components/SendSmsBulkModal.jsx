@@ -67,7 +67,7 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
         <div className="modal-body">
           {step === 1 && (
             <>
-              <div className="tbl-wrap" style={{ marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
+              <div className="tbl-wrap" style={{ marginBottom: 14, maxHeight: 220, overflowY: "auto", overflowX: "auto" }}>
                 <table>
                   <thead><tr><th>Invoice #</th><th>Bidder</th><th>Phone</th></tr></thead>
                   <tbody>
@@ -75,7 +75,7 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
                       <tr key={inv.id}>
                         <td className="mono">{inv.invoiceNumber}</td>
                         <td>{inv.bidderName}</td>
-                        <td className="mono">{inv.winnerPhone}</td>
+                        <td className="mono" style={{ whiteSpace: "nowrap" }}>{inv.winnerPhone}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -102,12 +102,18 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
               <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 10 }}>
                 Review each message below, then confirm send.
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto", marginBottom: 14 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: 340, overflowY: "auto", marginBottom: 16, padding: "2px 2px" }}>
                 {previews.map((p) => (
-                  <div key={p.invoiceId} className="card" style={{ padding: 12, background: p.ok ? "var(--paper)" : "var(--red-bg)" }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.invoiceNumber}</div>
+                  <div key={p.invoiceId} className="card" style={{ padding: 14, background: p.ok ? "var(--paper)" : "var(--red-bg)", border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.invoiceNumber}</div>
+                      {p.ok && <div className="mono" style={{ fontSize: 12, color: "var(--text-2)" }}>to +{p.phone}</div>}
+                    </div>
                     {p.ok ? (
-                      <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{p.message}</div>
+                      <>
+                        <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", marginBottom: 6 }}>{p.message}</div>
+                        <div style={{ fontSize: 11.5, color: "var(--text-3)" }}>Due: {p.dueDate}</div>
+                      </>
                     ) : (
                       <div style={{ fontSize: 12.5, color: "var(--red)" }}>{p.error || "Cannot preview this invoice"}</div>
                     )}
