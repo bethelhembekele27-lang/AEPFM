@@ -329,17 +329,17 @@ function exportRecords() {
         <button className="btn btn-ghost" onClick={clearSearch}>Clear</button>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, alignItems: "center" }}> 
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-primary" onClick={() => setShowNewWinner(true)}>New winner</button>
+          <button className="btn btn-ghost" onClick={exportRecords}>Export records</button>
+        </div>
         {selected.length > 0 && (
-          <span style={{ fontSize: 12.5, color: "var(--text-2)" }}>
-            {selected.length} selected
-          </span>
+          <span style={{ fontSize: 12.5, color: "var(--text-2)" }}>{selected.length} selected</span>
         )}
+      </div>
 
-        <button className="btn btn-primary" onClick={() => setShowNewWinner(true)}>
-          New winner
-        </button>
-
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <ActionBtn
           label="Generate invoice PDF"
           roles={PDF_ROLES}
@@ -352,10 +352,6 @@ function exportRecords() {
           onClick={() => { if (selected.length === 0) { window.alert("Select at least one invoice first."); return; } setShowSmsBulkModal(true); }}
         >
           Send SMS
-        </button>
-
-        <button className="btn btn-blue" onClick={exportRecords}>
-          Export records
         </button>
 
         {role === "administrator" && ( 

@@ -6,6 +6,9 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [step, setStep] = useState(1); // 1 = configure, 2 = preview, 3 = result
+  const [previews, setPreviews] = useState([]);
+  const [loadingPreviews, setLoadingPreviews] = useState(false);
 
   async function handleSend() {
     setSending(true);
@@ -21,11 +24,36 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Bulk send failed'); return; }
       setResult(data);
+      setStep(3);
     } catch (err) {
       setError('Network error sending SMS');
       console.error(err);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function loadPreviews() {
+    setLoadingPreviews(true);
+    setError("");
+    try {
+      const results = await Promise.all(
+        invoices.map(async (inv) => {
+          const qs = dueDays ? `?dueDays=${encodeURIComponent(dueDays)}` : "";
+          const res = await apiCall(`/api/invoices/${inv.id}/sms/preview/${qs}`, {
+            headers: token ? { Authorization: `Token ${token}` } : {},
+          });
+          const data = await res.json();
+          return { invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, ok: res.ok, ...data };
+        })
+      );
+      setPreviews(results);
+      setStep(2);
+    } catch (err) {
+      setError("Failed to load message previews");
+      console.error(err);
+    } finally {
+      setLoadingPreviews(false);
     }
   }
 
@@ -37,7 +65,7 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
-          {!result ? (
+          {step === 1 && (
             <>
               <div className="tbl-wrap" style={{ marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
                 <table>
@@ -62,13 +90,40 @@ export default function SendSmsBulkModal({ invoices, onClose, onDone, token }) {
               </div>
               {error && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 13 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-brass" onClick={handleSend} disabled={sending}>
-                  {sending ? "Sending..." : `Send ${invoices.length} SMS`}
+                <button className="btn btn-brass" onClick={loadPreviews} disabled={loadingPreviews}>
+                  {loadingPreviews ? "Loading previews..." : "Preview messages"}
                 </button>
                 <button className="btn btn-ghost" onClick={onClose} disabled={sending}>Cancel</button>
               </div>
             </>
-          ) : (
+          )}
+          {step === 2 && !result && (
+            <>
+              <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 10 }}>
+                Review each message below, then confirm send.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto", marginBottom: 14 }}>
+                {previews.map((p) => (
+                  <div key={p.invoiceId} className="card" style={{ padding: 12, background: p.ok ? "var(--paper)" : "var(--red-bg)" }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.invoiceNumber}</div>
+                    {p.ok ? (
+                      <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{p.message}</div>
+                    ) : (
+                      <div style={{ fontSize: 12.5, color: "var(--red)" }}>{p.error || "Cannot preview this invoice"}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {error && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 13 }}>{error}</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-brass" onClick={handleSend} disabled={sending}>
+                  {sending ? "Sending..." : `Confirm send to ${previews.filter(p => p.ok).length} invoice(s)`}
+                </button>
+                <button className="btn" onClick={() => setStep(1)} disabled={sending}>Back</button>
+              </div>
+            </>
+          )}
+          {result && (
             <>
               <div className="login-success" style={{ marginBottom: 14 }}>
                 Sent: {result.sent.length}. Skipped: {result.skipped.length}.
