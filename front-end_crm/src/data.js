@@ -1,5 +1,5 @@
 export const statusLabels = {
-  invoice_generated: "Invoice Generated",
+  invoice_generated: "Draft",
   pending_payment: "Pending Payment",
   payment_submitted: "Payment Submitted",
   under_verification: "Under Verification",
