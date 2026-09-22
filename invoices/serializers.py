@@ -158,15 +158,32 @@ class InvoiceListSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerialize
     companyName = serializers.SerializerMethodField()
     auctionCompany = serializers.SerializerMethodField()
     winnerPhone = serializers.SerializerMethodField()
+    latestReceiptStatus = serializers.SerializerMethodField()
+    latestReceiptReviewedAt = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
         fields = [
             'id', 'invoiceNumber', 'invoiceDate', 'dueDate', 'winner',
             'totalAmount', 'status', 'createdAt', 'updatedAt',
-            'bidderName', 'companyName','auctionCompany', 'winnerPhone',
+            'bidderName', 'companyName', 'auctionCompany', 'winnerPhone',
             'callNotes', 'lots', 'smsSentAt', 'smsSendCount',
+            'latestReceiptStatus', 'latestReceiptReviewedAt',
         ]
+
+    def _latest_reviewed_payment(self, obj):
+        return obj.payments.filter(
+            submittedViaPublicLink=True,
+            verificationStatus__in=['manager_approved', 'manager_rejected'],
+        ).order_by('-managerVerifiedDate').first()
+
+    def get_latestReceiptStatus(self, obj):
+        p = self._latest_reviewed_payment(obj)
+        return p.verificationStatus if p else None
+
+    def get_latestReceiptReviewedAt(self, obj):
+        p = self._latest_reviewed_payment(obj)
+        return p.managerVerifiedDate if p else None
 # -------------------------------------------------- Invoice (detail view)
 
 class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerializer):

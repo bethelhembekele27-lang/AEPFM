@@ -428,6 +428,16 @@ function exportRecords() {
                         SMS sent ✓ {new Date(inv.smsSentAt).toLocaleDateString()}
                       </div>
                     )}
+                    {inv.latestReceiptStatus === "manager_approved" && (
+                      <div style={{ fontSize: 11.5, color: "var(--green)" }}>
+                        Receipt approved ✓ {new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}
+                      </div>
+                    )}
+                    {inv.latestReceiptStatus === "manager_rejected" && (
+                      <div style={{ fontSize: 11.5, color: "var(--red)" }}>
+                        Receipt rejected ✕ {new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}
+                      </div>
+                    )}
                   </td>
                   </tr>
               ))}

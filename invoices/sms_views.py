@@ -47,7 +47,11 @@ def _parse_days(raw, default):
 
 def _state_problem(invoice):
     if invoice.status == 'invoice_generated':
-        return 'Generate the invoice PDF first, then send the SMS.'
+        return (
+            'This invoice is still a Draft. Generate the invoice PDF first to '
+            'finalize the Amharic name and fee details — this is required before '
+            'texting the bidder.'
+        )
     if invoice.status in ('paid', 'cancelled', 'waived'):
         return f'This invoice is {invoice.status}, so no SMS can be sent.'
     return None
