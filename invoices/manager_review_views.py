@@ -8,7 +8,7 @@ from rest_framework import status as http_status
 from .models import Payment
 from .permissions import has_permission
 from .audit import log_audit
-from .sms import send_sms, normalize_phone
+from .sms import send_sms, normalize_phone, public_link
 
 
 class PendingReceiptsView(APIView):
@@ -127,14 +127,11 @@ class ReceiptReviewView(APIView):
             phone = normalize_phone(winner.winnerPhone)
             if phone:
                 name = winner.bidderNameAmharic or winner.bidderName
-                # Build absolute base URL without a trailing slash
-                base_url = request.build_absolute_uri('/').rstrip('/')
-                public_url = f"{base_url}/invoice/{invoice.publicToken}"
                 message = (
                     f"ውድ {name}፣ "
                     f"የላኩት የክፍያ ደረሰኝ ውድቅ ተደርጓል። "
                     f"ምክንያት፡ {note} "
-                    f"እባክዎ በዚሁ አገናኝ በድጋሚ ይላኩ፦ {public_url}"
+                    f"እባክዎ በዚሁ አገናኝ በድጋሚ ይላኩ፦ {public_link(invoice)}"
                 )
                 send_sms(phone, message)
 
