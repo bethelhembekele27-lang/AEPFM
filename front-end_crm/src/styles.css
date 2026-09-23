@@ -117,6 +117,9 @@ a{color:inherit;}
 .btn[disabled], .btn.locked{opacity:0.35;cursor:not-allowed;pointer-events:none;}
 .card.locked, .section.locked{opacity:0.4;pointer-events:none;}
 
+.btn-icon-only{width:32px !important;min-width:32px !important;height:32px;padding:0 !important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+.btn-icon-only svg{width:16px;height:16px;}
+
 .btn-delete {
   width: 34px !important;
   min-width: 34px !important;

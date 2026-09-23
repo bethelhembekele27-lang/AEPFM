@@ -296,7 +296,12 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
                         </td>
                         <td>
                           {p.receiptUrl ? (
-                            <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View</a>
+                            <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-icon-only" title="View receipt">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            </a>
                           ) : <span style={{ color: "var(--text-3)" }}>—</span>}
                         </td>
                       </tr>
