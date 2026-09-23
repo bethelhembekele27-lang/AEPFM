@@ -106,6 +106,7 @@ a{color:inherit;}
 .btn-primary{background:var(--ink);color:#fff;border-color:var(--ink);}
 .btn-brass{background:var(--brass);color:#fff;border-color:var(--brass);}
 .btn-ghost{background:transparent;}
+.btn-ghost.btn-danger{color:var(--red);}
 
 .btn-sm{padding:5px 10px;font-size:12px;}
 
