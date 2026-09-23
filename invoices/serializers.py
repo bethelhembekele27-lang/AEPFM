@@ -3,8 +3,9 @@ from rest_framework import serializers
 
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
-    Invoice, InvoiceLot, Payment, Attachment, AuditLog,OfficeSettings,
+    Invoice, InvoiceLot, Payment, Attachment, AuditLog, OfficeSettings,
 )
+from .permissions import has_permission
 
 
 def user_display_name(user):
@@ -189,7 +190,7 @@ class InvoiceListSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerialize
 class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSerializer):
     winner = WinnerSerializer(read_only=True)
     lots = InvoiceLotSerializer(many=True, read_only=True)
-    payments = PaymentSerializer(many=True, read_only=True)
+    payments = serializers.SerializerMethodField()
     attachments = AttachmentSerializer(many=True, read_only=True)
     totalAmount = serializers.ReadOnlyField()
     bidderName = serializers.SerializerMethodField()
@@ -209,6 +210,12 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
             'bidderName', 'companyName','auctionCompany', 'winnerPhone',
             'feePercentage', 'verifiedBy', 'columnMapping', 'smsSentAt', 'smsSendCount',
         ]
+
+    def get_payments(self, obj):
+        request = self.context.get('request')
+        can_view_receipts = bool(request) and has_permission(request.user, 'manager_verify_receipt')
+        serializer_cls = ManagerPaymentSerializer if can_view_receipts else PaymentSerializer
+        return serializer_cls(obj.payments.order_by('-uploadedAt'), many=True, context=self.context).data
 
     def get_feePercentage(self, obj):
         percentages = {str(lot.feePercentage) for lot in obj.lots.all()}

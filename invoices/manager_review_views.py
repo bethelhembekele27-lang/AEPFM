@@ -92,10 +92,13 @@ class ReceiptReviewView(APIView):
 
             if decision == 'approve':
                 payment.verificationStatus = 'manager_approved'
-                invoice.status = 'under_verification'
+                payment.paymentStatus = 'verified'
+                payment.verifiedBy = request.user
+                payment.verifiedDate = timezone.now()
+                invoice.status = 'paid'
                 log_audit(
                     invoice,
-                    'Receipt approved by manager',
+                    'Receipt approved by manager (auto-marked paid)',
                     request.user,
                     previous_status,
                     invoice.status,
@@ -116,8 +119,8 @@ class ReceiptReviewView(APIView):
                 )
 
             payment.save(update_fields=[
-                'verificationStatus', 'managerVerifiedBy',
-                'managerVerifiedDate', 'managerNote',
+                'verificationStatus', 'managerVerifiedBy', 'managerVerifiedDate',
+                'managerNote', 'paymentStatus', 'verifiedBy', 'verifiedDate',
             ])
             invoice.save(update_fields=['status', 'updatedAt'])
 

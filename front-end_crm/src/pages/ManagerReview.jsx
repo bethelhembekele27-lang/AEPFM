@@ -112,7 +112,11 @@ export default function ManagerReview({ role, token }) {
         {selected.length === 1 && (() => {
           const row = rows.find((r) => r.id === selected[0]);
           return row?.receiptUrl ? (
-            <a href={fileUrl(row.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+            <a href={fileUrl(row.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} title="View receipt">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
               View receipt
             </a>
           ) : null;
@@ -187,40 +191,33 @@ export default function ManagerReview({ role, token }) {
               <button className="modal-close" onClick={() => setReviewing(null)}>&times;</button>
             </div>
             <div className="modal-body">
-              {reviewing === "reject" && (
-                <div className="locked-note" style={{ marginBottom: 10 }}>
-                  Each bidder will be sent an SMS with this note and a link to resubmit.
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: 12, borderRadius: 8, background: reviewing === "approve" ? "var(--green-bg)" : "var(--red-bg)" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={reviewing === "approve" ? "var(--green)" : "var(--red)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  {reviewing === "approve" ? <path d="M20 6L9 17l-5-5" /> : <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>}
+                </svg>
+                <div style={{ fontSize: 13, color: reviewing === "approve" ? "var(--green)" : "var(--red)" }}>
+                  {reviewing === "approve"
+                    ? `This will mark ${selected.length} invoice(s) as Paid immediately.`
+                    : `The bidder will be notified by SMS and asked to resubmit.`}
                 </div>
-              )}
+              </div>
               <div className="field" style={{ marginBottom: 14 }}>
-                <div className="fl">
-                  Note {reviewing === "reject" && <span className="req">*</span>}
+                <div className="fl">Note {reviewing === "reject" && <span className="req">*</span>}
+                  {reviewing === "approve" && <span className="opt"> (optional)</span>}
                 </div>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
-                  style={{
-                    width: "100%",
-                    fontFamily: "'Inter'",
-                    fontSize: 14,
-                    padding: 10,
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                  }}
+                  placeholder={reviewing === "reject" ? "e.g. Amount doesn't match, receipt is blurry, wrong bank account..." : "Any internal note about this approval"}
+                  style={{ width: "100%", fontFamily: "'Inter'", fontSize: 14, padding: 10, border: "1px solid var(--border)", borderRadius: 6 }}
                 />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className={`btn ${reviewing === "approve" ? "btn-brass" : "btn-danger"}`}
-                  onClick={submitReview}
-                  disabled={saving}
-                >
-                  {saving ? "Saving…" : `Confirm ${reviewing}`}
+                <button className={`btn ${reviewing === "approve" ? "btn-brass" : "btn-danger"}`} onClick={submitReview} disabled={saving}>
+                  {saving ? "Saving..." : reviewing === "approve" ? `Mark ${selected.length} invoice(s) as Paid` : `Reject & notify bidder`}
                 </button>
-                <button className="btn btn-ghost" onClick={() => setReviewing(null)} disabled={saving}>
-                  Cancel
-                </button>
+                <button className="btn btn-ghost" onClick={() => setReviewing(null)} disabled={saving}>Cancel</button>
               </div>
             </div>
           </div>

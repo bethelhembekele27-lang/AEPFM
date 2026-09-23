@@ -272,6 +272,41 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
             </table>
           </div>
 
+          {invoice.payments && invoice.payments.length > 0 && (
+            <>
+              <div className="section-label">Payments &amp; receipts</div>
+              <div className="tbl-wrap" style={{ marginBottom: 16 }}>
+                <table>
+                  <thead>
+                    <tr><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Receipt</th></tr>
+                  </thead>
+                  <tbody>
+                    {invoice.payments.map((p) => (
+                      <tr key={p.id}>
+                        <td className="amount">{money(p.amountPaid)}</td>
+                        <td>{p.paymentMethod}</td>
+                        <td className="mono">{p.paymentDate}</td>
+                        <td>
+                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved</span>}
+                          {p.verificationStatus === "manager_rejected" && <span className="stamp cancelled">Rejected</span>}
+                          {p.verificationStatus === "pending_manager_review" && <span className="stamp pending_payment">Pending review</span>}
+                          {(!p.verificationStatus || p.verificationStatus === "not_applicable") && (
+                            <span className="stamp invoice_generated">{p.paymentStatus}</span>
+                          )}
+                        </td>
+                        <td>
+                          {p.receiptUrl ? (
+                            <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">View</a>
+                          ) : <span style={{ color: "var(--text-3)" }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
           <div className="section-label">Attachments</div>
           <div className="attach-list" style={{ marginBottom: 12 }}>
             {attachments.length === 0 && <div className="locked-note" style={{ marginTop: 0 }}>No attachments yet.</div>}
