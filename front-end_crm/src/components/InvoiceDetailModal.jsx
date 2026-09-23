@@ -121,6 +121,18 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
     }
   }
 
+  async function handleDeletePayment(id) {
+    if (!window.confirm("Delete this payment record permanently?")) return;
+    try {
+      const res = await apiCall(`/api/payments/${id}/`, { method: "DELETE", headers: token ? { Authorization: `Token ${token}` } : {} });
+      if (res.ok) await fetchInvoice();
+      else window.alert("Failed to delete payment.");
+    } catch (err) {
+      window.alert("Network error deleting payment.");
+      console.error(err);
+    }
+  }
+
   async function handleSaveEdit() {
     setEditError("");
     setSaving(true);
@@ -278,13 +290,12 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
               <div className="tbl-wrap" style={{ marginBottom: 16 }}>
                 <table>
                   <thead>
-                    <tr><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Receipt</th></tr>
+                    <tr><th>Amount</th><th>Date</th><th>Status</th><th></th></tr>
                   </thead>
                   <tbody>
                     {invoice.payments.map((p) => (
                       <tr key={p.id}>
                         <td className="amount">{money(p.amountPaid)}</td>
-                        <td>{p.paymentMethod}</td>
                         <td className="mono">{p.paymentDate}</td>
                         <td>
                           {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved</span>}
@@ -294,15 +305,20 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
                             <span className="stamp invoice_generated">{p.paymentStatus}</span>
                           )}
                         </td>
-                        <td>
-                          {p.receiptUrl ? (
+                        <td style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          {p.receiptUrl && (
                             <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-icon-only" title="View receipt">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                                 <circle cx="12" cy="12" r="3" />
                               </svg>
                             </a>
-                          ) : <span style={{ color: "var(--text-3)" }}>—</span>}
+                          )}
+                          {canDelete && (
+                            <button className="btn btn-sm btn-icon-only btn-danger" title="Delete payment" onClick={() => handleDeletePayment(p.id)}>
+                              <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM9 16h2v-7H9v7zm4 0h2v-7h-2v7z" /></svg>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -320,21 +336,28 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
                 <a href={fileUrl(a.filePath)} target="_blank" rel="noopener noreferrer" style={{ color: "var(--brass-dark)" }}>
                   {a.fileName} <span style={{ color: "var(--text-3)", fontWeight: 400 }}>({a.documentType})</span>
                 </a>
-                {canDelete && (
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteAttachment(a.id)}>Delete</button>
-                )}
+                {canDelete && <button className="btn btn-sm btn-danger" onClick={() => handleDeleteAttachment(a.id)}>Delete</button>}
               </div>
             ))}
           </div>
           {canUpload && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-              <select className="select-standalone" style={{ maxWidth: 200 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
-                {DOC_TYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
-              </select>
-              <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ maxWidth: 220 }} />
-              <button className="btn btn-sm btn-brass" onClick={handleUpload} disabled={!file || uploading}>
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
+            <div className="card" style={{ background: "var(--paper)", marginBottom: 16, padding: 16 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <select className="select-standalone" style={{ maxWidth: 190 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                  {DOC_TYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
+                </select>
+                <div
+                  className="filedrop"
+                  onClick={() => document.getElementById("staff-attach-input")?.click()}
+                  style={{ cursor: "pointer", flex: 1, minWidth: 200, padding: "10px 14px" }}
+                >
+                  {file ? file.name : "Click to choose a file — any document type"}
+                  <input id="staff-attach-input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
+                </div>
+                <button className="btn btn-sm btn-brass" onClick={handleUpload} disabled={!file || uploading}>
+                  {uploading ? "Uploading..." : "Upload"}
+                </button>
+              </div>
             </div>
           )}
 

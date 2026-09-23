@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AuctionViewSet, WinnerViewSet, InvoiceViewSet,
-    AttachmentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
+    AttachmentDeleteView, PaymentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
     OfficeSettingsView, ManualWinnerCreateView,
 )
 from .manager_review_views import PendingReceiptsView, ReceiptReviewView
@@ -24,6 +24,7 @@ urlpatterns = [
     path('import-batches/confirm/', ImportBatchConfirmView.as_view(), name='import-batch-confirm'),
 
     path('attachments/<int:pk>/', AttachmentDeleteView.as_view(), name='attachment-delete'),
+    path('payments/<int:pk>/', PaymentDeleteView.as_view(), name='payment-delete'),
     path('audit-logs/', AuditLogListView.as_view(), name='audit-log-list'),
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),
     path('fee-config/', FeeConfigView.as_view(), name='fee-config'),

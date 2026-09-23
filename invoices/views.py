@@ -354,6 +354,19 @@ class AttachmentDeleteView(generics.DestroyAPIView):
         instance.delete()
 
 
+class PaymentDeleteView(generics.DestroyAPIView):
+    """DELETE /api/payments/{id}/ — removes a payment/receipt record entirely."""
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        if not has_permission(self.request.user, 'delete_records'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only administrators can delete payment records.')
+        instance.delete()
+
+
 class AuditLogListView(generics.ListAPIView):
     """
     Read-only at every layer — the model has no delete/update path exposed
