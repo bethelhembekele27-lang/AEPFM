@@ -129,11 +129,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         collection_pct = (total_collected / total_due * 100) if total_due else 0
 
         def received_since(start_date):
+            # Same definition as report_queries._revenue_qs: fees (lotFee) of invoices that are
+            # Paid AND have a verified payment dated in the period. Subquery, not a join,
+            # so an invoice with two verified payments is never counted twice.
+            verified_invoice_ids = Payment.objects.filter(
+                paymentStatus='verified',
+                verifiedDate__date__gte=start_date,
+            ).values('invoice_id')
             return (
-                Payment.objects.filter(
-                    paymentStatus='verified',
-                    verifiedDate__date__gte=start_date,
-                ).aggregate(t=Sum('amountPaid'))['t'] or 0
+                InvoiceLot.objects.filter(invoice__status='paid', invoice_id__in=verified_invoice_ids)
+                .aggregate(t=Sum('lotFee'))['t'] or 0
             )
         year_start = today.replace(month=1, day=1)
         today_collected = received_since(today)

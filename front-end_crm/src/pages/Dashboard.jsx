@@ -122,7 +122,7 @@ export default function Dashboard({ role, token }) {
             <PeriodDropdown value={receivedPeriod} onChange={setReceivedPeriod} />
           </div>
           <div className="stat-value">{money(receivedThisPeriod.toFixed(2))}</div>
-          <div className="stat-foot">Payments verified in this period</div>
+          <div className="stat-foot">Fees of invoices paid in this period</div>
         </div>
         <div className="card">
           <div className="stat-label">Collection percentage</div>
