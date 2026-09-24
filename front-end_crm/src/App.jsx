@@ -53,8 +53,8 @@ export default function App() {
   const [smsInvoiceId, setSmsInvoiceId] = useState(null);
 
   useEffect(() => {
-    if (session && !canAccessPage(page, session.role)) {
-      setPage(getDefaultPage(session.role));
+    if (session && !canAccessPage(page, session.privileges)) {
+      setPage(getDefaultPage(session.privileges));
     }
   }, [session]);
 
@@ -68,10 +68,10 @@ export default function App() {
     setDetailInvoiceId(null);
   }
 
-  function handleLogin(role, username, token, remember) {
+  function handleLogin(role, username, token, remember, privileges) {
     sessionStorage.setItem("authToken", token);
-    setSession({ role, username, token });
-    setPage(getDefaultPage(role));
+    setSession({ role, username, token, privileges: privileges || [] });
+    setPage(getDefaultPage(privileges || []));
   }
   function handleSaveProfile(newUsername) {
     setSession((s) => ({ ...s, username: newUsername }));
@@ -87,6 +87,7 @@ export default function App() {
         page={page}
         setPage={(p) => { setSmsInvoiceId(null); setPage(p); }}
         role={session.role}
+        privileges={session.privileges}
         username={session.username}
         theme={theme}
         setTheme={setTheme}
@@ -115,7 +116,7 @@ export default function App() {
           )}
           {page === "dashboard" && <Dashboard role={session.role} token={session.token} />}
           {page === "queues" && <Queues role={session.role} token={session.token} />}
-          {page === "reports" && <Reports role={session.role} token={session.token} />}
+          {page === "reports" && <Reports role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "callcenter" && <CallCenter role={session.role} token={session.token} />}
           {page === "receipts" && <ManagerReview role={session.role} token={session.token} />}
           {page === "audit" && <AuditTrail role={session.role} token={session.token} />}

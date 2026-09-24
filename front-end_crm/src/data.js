@@ -36,32 +36,34 @@ export const navItems = [
   { key: "employees", label: "Employees" },
 ];
 
-// Mirrors each page's own internal canView/canManage check — kept here so
-// the nav bar and the page component agree on who can see what. null means
-// "no restriction, any logged-in role."
-export const pagePermissions = {
-  dashboard: ["administrator", "auction_manager", "finance_manager", "viewer"],
+// Which privilege(s) each page requires — any one is enough. null means
+// "no restriction, any logged-in employee." Kept here so the nav bar and
+// each page component agree on who can see what.
+export const pagePrivileges = {
+  dashboard: ["view_dashboard"],
   import: null,
   operations: null,
-  queues: ["administrator", "auction_manager", "finance_manager"],
-  reports: ["administrator"],
+  queues: ["view_invoices"],
+  reports: ["view_reports"],
   callcenter: null,
-  receipts: ["administrator", "auction_manager"],
-  audit: ["administrator", "finance_manager"],
-  employees: ["administrator"],
+  receipts: ["manager_verify_receipt"],
+  audit: ["view_audit"],
+  employees: ["manage_users"],
 };
 
-export function canAccessPage(pageKey, role) {
-  const allowed = pagePermissions[pageKey];
-  return !allowed || allowed.includes(role);
+export function canAccessPage(pageKey, privileges) {
+  const required = pagePrivileges[pageKey];
+  if (!required) return true;
+  const owned = privileges || [];
+  return required.some((p) => owned.includes(p));
 }
 
-export function getAccessibleNavItems(role) {
-  return navItems.filter((n) => canAccessPage(n.key, role));
+export function getAccessibleNavItems(privileges) {
+  return navItems.filter((n) => canAccessPage(n.key, privileges));
 }
 
-export function getDefaultPage(role) {
-  const accessible = getAccessibleNavItems(role);
+export function getDefaultPage(privileges) {
+  const accessible = getAccessibleNavItems(privileges);
   return accessible.length > 0 ? accessible[0].key : null;
 }
 

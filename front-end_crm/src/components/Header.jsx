@@ -3,9 +3,9 @@ import { getAccessibleNavItems } from "../data";
 import logo from "../logo";
 import ProfileMenu from "./ProfileMenu";
 
-export default function Header({ page, setPage, role, username, theme, setTheme, onLogout, onOpenAccountSettings }) {
+export default function Header({ page, setPage, role, privileges, username, theme, setTheme, onLogout, onOpenAccountSettings }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const items = getAccessibleNavItems(role);
+  const items = getAccessibleNavItems(privileges);
 
   const goTo = (key) => {
     setPage(key);

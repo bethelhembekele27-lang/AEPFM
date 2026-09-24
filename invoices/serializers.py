@@ -282,6 +282,7 @@ def _login_result(user):
         'token': token.key,
         'username': user.get_username(),
         'role': role_name_to_slug.get(role_name, role_name),
+        'privileges': list(user.profile.privileges or []),
     }
 
 

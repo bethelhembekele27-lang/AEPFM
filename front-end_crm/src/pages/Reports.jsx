@@ -45,7 +45,7 @@ function loadDraftFilters() {
   };
 }
 
-export default function Reports({ role, token }) {
+export default function Reports({ privileges, token }) {
   const [filters, setFilters] = useState(loadDraftFilters);
   const [options, setOptions] = useState({ companies: [], importBatches: [], paymentStatuses: [] });
   const [preview, setPreview] = useState(null);
@@ -181,11 +181,13 @@ export default function Reports({ role, token }) {
     }
   }
 
-  if (role !== "administrator") {
+  const canView = (privileges || []).includes("view_reports");
+
+  if (!canView) {
     return (
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ margin: "0 0 6px" }}>Custom reports</h3>
-        <div className="locked-note">Only Administrators can build and generate custom reports.</div>
+        <div className="locked-note">You don't have the "Generate custom reports" privilege.</div>
       </div>
     );
   }

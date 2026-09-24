@@ -56,9 +56,9 @@ export default function Login({ onLogin }) {
     sessionStorage.setItem('authToken', data.token);
     if (rememberMe) {
       localStorage.setItem('authToken', data.token);
-      localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role }));
+      localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role, privileges: data.privileges }));
     }
-    onLogin(data.role, data.username, data.token, rememberMe);
+    onLogin(data.role, data.username, data.token, rememberMe, data.privileges);
   }
 
   async function handleGoogleCredential(response) {

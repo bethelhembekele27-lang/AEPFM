@@ -8,6 +8,7 @@ PRIVILEGE_CATALOG = [
     {'key': 'change_status_generic', 'label': 'Change payment status', 'category': 'Processing Fees'},
     {'key': 'verify_payment', 'label': 'Verify / reject payments', 'category': 'Processing Fees'},
     {'key': 'import_batches', 'label': 'Import new bid data batches', 'category': 'Processing Fees'},
+    {'key': 'view_dashboard', 'label': 'View financial dashboard', 'category': 'Reports'},
     {'key': 'view_reports', 'label': 'Generate custom reports', 'category': 'Reports'},
     {'key': 'view_audit', 'label': 'View audit trail', 'category': 'Reports'},
     {'key': 'manage_call_center', 'label': 'Manage CRM / call center inquiries', 'category': 'CRM'},
@@ -29,9 +30,12 @@ BUILT_IN_ROLE_DEFAULTS = {
     'Administrator': [p['key'] for p in PRIVILEGE_CATALOG],
     'Auction Manager': [
         'view_invoices', 'edit_invoice', 'generate_invoice', 'import_batches',
-        'view_reports', 'view_audit', 'manager_verify_receipt', 'send_sms',
+        'view_dashboard', 'view_reports', 'view_audit', 'manager_verify_receipt', 'send_sms',
     ],
-    'Finance Manager': ['view_invoices', 'change_status_generic', 'verify_payment', 'view_reports', 'view_audit'],
+    'Finance Manager': [
+        'view_invoices', 'change_status_generic', 'verify_payment',
+        'view_dashboard', 'view_reports', 'view_audit',
+    ],
     'CRM / Call Center Officer': ['manage_call_center', 'view_call_center_dashboard', 'view_reports', 'send_sms'],
-    'Viewer': ['view_invoices', 'view_audit'],
+    'Viewer': ['view_invoices', 'view_dashboard', 'view_audit'],
 }
