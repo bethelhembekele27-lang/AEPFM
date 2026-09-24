@@ -25,7 +25,7 @@ from .serializers import (
     AuctionSerializer, WinnerSerializer, InvoiceListSerializer,
     InvoiceDetailSerializer, PaymentSerializer, AttachmentSerializer,
     AuditLogSerializer, FeeConfigSerializer, LoginSerializer, GoogleLoginSerializer,
-    OfficeSettingsSerializer,
+    _login_result, OfficeSettingsSerializer,
 )
 from .permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
 
