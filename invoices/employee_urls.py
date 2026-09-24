@@ -3,7 +3,7 @@ from .employee_views import (
     PrivilegeCatalogView, RoleListCreateView, RoleDeleteView,
     EmployeeListCreateView, EmployeePrivilegesView, EmployeeDeactivateView,
     EmployeeBulkDeactivateView, EmployeeBulkActivateView, EmployeeBulkDeleteView, EmployeeResetPasswordView,
-    AccountProfileView, AccountChangePasswordView,
+    EmployeeEmailView, AccountProfileView, AccountChangePasswordView,
 )
 
 urlpatterns = [
@@ -17,6 +17,7 @@ urlpatterns = [
     path('employees/<int:employee_id>/privileges/', EmployeePrivilegesView.as_view(), name='employee-privileges'),
     path('employees/<int:employee_id>/deactivate/', EmployeeDeactivateView.as_view(), name='employee-deactivate'),
     path('employees/<int:employee_id>/reset-password/', EmployeeResetPasswordView.as_view(), name='employee-reset-password'),
+    path('employees/<int:employee_id>/email/', EmployeeEmailView.as_view(), name='employee-email'),
     path('account/profile/', AccountProfileView.as_view(), name='account-profile'),
     path('account/change-password/', AccountChangePasswordView.as_view(), name='account-change-password'),
 ]

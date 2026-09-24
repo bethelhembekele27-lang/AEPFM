@@ -14,6 +14,7 @@ djangorestframework==3.17.1
 et_xmlfile==2.0.0
 fonttools==4.63.0
 gunicorn==26.0.0
+google-auth==2.57.0
 idna==3.18
 jmespath==1.1.0
 openpyxl==3.1.5

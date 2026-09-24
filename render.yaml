@@ -44,6 +44,8 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
 
 
   - type: web
@@ -57,6 +59,8 @@ services:
         value: "https://aepfm-api.onrender.com"
       - key: NODE_VERSION
         value: "22"
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
     routes:
       - type: rewrite
         source: /*

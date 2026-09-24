@@ -1,5 +1,10 @@
+from django.conf import settings
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from rest_framework import serializers
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+from google.auth.exceptions import GoogleAuthError
 
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
@@ -261,6 +266,25 @@ class PublicInvoiceSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
 
 # ================================================================= Auth (Login)
 
+def _login_result(user):
+    """Same response shape for password login and Google login."""
+    from rest_framework.authtoken.models import Token
+    token, _ = Token.objects.get_or_create(user=user)
+    role_name_to_slug = {
+        'Administrator': 'administrator',
+        'Auction Manager': 'auction_manager',
+        'Finance Manager': 'finance_manager',
+        'CRM / Call Center Officer': 'call_operator',
+        'Viewer': 'viewer',
+    }
+    role_name = user.profile.role.name
+    return {
+        'token': token.key,
+        'username': user.get_username(),
+        'role': role_name_to_slug.get(role_name, role_name),
+    }
+
+
 class LoginSerializer(serializers.Serializer):
     """
     Handles POST /api/auth/login/ — accepts username and password,
@@ -288,25 +312,47 @@ class LoginSerializer(serializers.Serializer):
         return data
 
     def create(self, validated_data):
-        user = validated_data['user']
-        from rest_framework.authtoken.models import Token
-        token, _ = Token.objects.get_or_create(user=user)
+        return _login_result(validated_data['user'])
 
-        role_name = user.profile.role.name
-        role_name_to_slug = {
-            'Administrator': 'administrator',
-            'Auction Manager': 'auction_manager',
-            'Finance Manager': 'finance_manager',
-            'CRM / Call Center Officer': 'call_operator',
-            'Viewer': 'viewer',
-        }
-        role_slug = role_name_to_slug.get(role_name, role_name)
 
-        return {
-            'token': token.key,
-            'username': user.get_username(),
-            'role': role_slug,
-        }
+class GoogleLoginSerializer(serializers.Serializer):
+    """
+    POST /api/auth/google/ {id_token}. Does NOT create accounts: the verified Google
+    email must match an existing User that has an active StaffProfile.
+    """
+    id_token = serializers.CharField()
+
+    def validate(self, data):
+        try:
+            claims = google_id_token.verify_oauth2_token(
+                data['id_token'], google_requests.Request(), settings.GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            raise serializers.ValidationError('Invalid or expired Google token.')
+        except GoogleAuthError:
+            raise serializers.ValidationError('Could not reach Google to verify the sign-in. Try again.')
+
+        if not claims.get('email_verified', False):
+            raise serializers.ValidationError('Google account email is not verified.')
+        email = (claims.get('email') or '').strip().lower()
+        if not email:
+            raise serializers.ValidationError('No email on the Google account.')
+
+        users = list(User.objects.filter(email__iexact=email)[:2])
+        if not users:
+            raise serializers.ValidationError('This Google account is not linked to any employee.')
+        if len(users) > 1:
+            raise serializers.ValidationError('Multiple accounts share this email. Contact an administrator.')
+        user = users[0]
+
+        profile = getattr(user, 'profile', None)
+        if profile is None:
+            raise serializers.ValidationError('This account has no staff profile.')
+        if not user.is_active or not profile.isActive:
+            raise serializers.ValidationError('This account has been deactivated.')
+
+        data['user'] = user
+        return data
 from .models import Role
 from .privileges import PRIVILEGE_CATALOG
 
@@ -325,13 +371,14 @@ class RoleSerializer(serializers.ModelSerializer):
 class EmployeeSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     username = serializers.SerializerMethodField()
+    email = serializers.CharField(source='user.email', read_only=True)
     roleName = serializers.CharField(source='role.name', read_only=True)
     privilegeCount = serializers.SerializerMethodField()
 
     class Meta:
         model = StaffProfile
         fields = [
-            'id', 'name', 'username', 'role', 'roleName', 'privileges',
+            'id', 'name', 'username', 'email', 'role', 'roleName', 'privileges',
             'privilegeCount', 'isActive', 'lastPasswordChange', 'lastUsernameChange',
         ]
 

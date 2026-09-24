@@ -4,7 +4,7 @@ import Stamp from "../components/Stamp";
 import { apiCall } from "../api";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in browser local time, not UTC
 }
 
 const queueDefs = [

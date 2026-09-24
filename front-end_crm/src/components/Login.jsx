@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { demoAccounts } from "../data";
 import logo from "../logo";
 import { API_BASE } from "../api";
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+// Google's initialize() can only be called once per page load, and the callback
+// it is given is frozen at that moment. If it pointed straight at a component's
+// function, then after a logout and re-login it would call the OLD, unmounted
+// component's setState (errors would silently not show). So initialize() gets a
+// stable wrapper and each Login instance registers itself in this variable.
+let googleInitialized = false;
+let googleHandler = null;
 
 function EyeToggleButton({ show, onToggle }) {
   return (
@@ -36,6 +46,71 @@ export default function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const googleButtonRef = useRef(null);
+  const rememberRef = useRef(false);
+
+  useEffect(() => { rememberRef.current = remember; }, [remember]);
+
+  function completeLogin(data, rememberMe) {
+    sessionStorage.setItem('authToken', data.token);
+    if (rememberMe) {
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role }));
+    }
+    onLogin(data.role, data.username, data.token, rememberMe);
+  }
+
+  async function handleGoogleCredential(response) {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/google/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: response.credential }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Google sign-in failed.");
+        return;
+      }
+      completeLogin(data, rememberRef.current);
+    } catch (err) {
+      setError("Network error. Please try again.");
+      console.error(err);
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
+  useEffect(() => { googleHandler = handleGoogleCredential; });   // runs every render
+  useEffect(() => () => { googleHandler = null; }, []);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let cancelled = false;
+    let timer;
+    function setup() {
+      if (cancelled) return;
+      if (!window.google?.accounts?.id) { timer = setTimeout(setup, 100); return; }
+      if (!googleInitialized) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (r) => googleHandler?.(r),
+        });
+        googleInitialized = true;
+      }
+      if (googleButtonRef.current) {
+        googleButtonRef.current.innerHTML = "";
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: "outline", size: "large", width: 316, text: "signin_with",
+        });
+      }
+    }
+    setup();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
 
   async function attemptLogin() {
     setError("");
@@ -59,12 +134,7 @@ export default function Login({ onLogin }) {
       }
 
       const data = await response.json();
-      sessionStorage.setItem('authToken', data.token);
-      if (remember) {
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role }));
-      }
-      onLogin(data.role, data.username, data.token, remember);
+      completeLogin(data, remember);
     } catch (err) {
       setError("Network error. Please try again.");
     }
@@ -110,6 +180,19 @@ export default function Login({ onLogin }) {
         {error && <div className="login-error">{error}</div>}
 
         <button className="btn btn-primary" style={{ width: "100%", marginTop: 18 }} onClick={attemptLogin}>Sign in</button>
+
+        {GOOGLE_CLIENT_ID && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }}>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+              <span style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>or</span>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", opacity: googleLoading ? 0.6 : 1, pointerEvents: googleLoading ? "none" : "auto" }}>
+              <div ref={googleButtonRef} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

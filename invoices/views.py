@@ -24,7 +24,8 @@ from .models import (
 from .serializers import (
     AuctionSerializer, WinnerSerializer, InvoiceListSerializer,
     InvoiceDetailSerializer, PaymentSerializer, AttachmentSerializer,
-    AuditLogSerializer, FeeConfigSerializer, LoginSerializer,OfficeSettingsSerializer,
+    AuditLogSerializer, FeeConfigSerializer, LoginSerializer, GoogleLoginSerializer,
+    OfficeSettingsSerializer,
 )
 from .permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
 
@@ -489,7 +490,21 @@ class LoginView(APIView):
             result = serializer.create(serializer.validated_data)
             return Response(result, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+
+class GoogleLoginView(APIView):
+    """POST /api/auth/google/ {id_token} -> {token, username, role}"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if not settings.GOOGLE_CLIENT_ID:
+            return Response({'error': 'Google sign-in is not configured on this server.'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        serializer = GoogleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            first = next(iter(serializer.errors.values()))[0]
+            return Response({'error': str(first)}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(_login_result(serializer.validated_data['user']))
 
 
 class OfficeSettingsView(generics.GenericAPIView):

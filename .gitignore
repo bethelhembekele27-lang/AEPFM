@@ -34,3 +34,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local handoff / session notes — not for version control
+HANDOFF.md

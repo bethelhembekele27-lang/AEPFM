@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AuctionViewSet, WinnerViewSet, InvoiceViewSet,
     AttachmentDeleteView, PaymentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
-    OfficeSettingsView, ManualWinnerCreateView,
+    OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
 )
 from .manager_review_views import PendingReceiptsView, ReceiptReviewView
 
@@ -20,6 +20,7 @@ router.register(r'import-batches', ImportBatchViewSet, basename='import-batch')
 
 urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
+    path('auth/google/', GoogleLoginView.as_view(), name='login-google'),
     path('import-batches/preview/', ImportBatchPreviewView.as_view(), name='import-batch-preview'),
     path('import-batches/confirm/', ImportBatchConfirmView.as_view(), name='import-batch-confirm'),
 

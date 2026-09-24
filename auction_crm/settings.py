@@ -111,7 +111,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Africa/Addis_Ababa"
 
 USE_I18N = True
 
@@ -168,6 +168,8 @@ SMS_ALLOWED_NUMBERS = [n.strip() for n in config("SMS_ALLOWED_NUMBERS", default=
 SMS_DEFAULT_DUE_DAYS = config("SMS_DEFAULT_DUE_DAYS", default=14, cast=int)
 TEXTBEE_API_KEY = config("TEXTBEE_API_KEY", default="")
 TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
+# --- Google OAuth (Phase 7) ---
+GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 # --- Cron (Phase 4) ---
 # Shared secret for the external daily pinger that hits POST /api/cron/flag-overdue/.
 # Empty means the endpoint always answers 403, so nothing runs unprompted.

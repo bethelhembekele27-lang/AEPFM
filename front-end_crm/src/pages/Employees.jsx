@@ -41,6 +41,7 @@ function NewEmployeeModal({ catalog, roles, onClose, onCreated, token }) {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [roleId, setRoleId] = useState(roles[0]?.id || "");
   const [privileges, setPrivileges] = useState(roles[0]?.defaultPrivileges || []);
@@ -74,6 +75,7 @@ function NewEmployeeModal({ catalog, roles, onClose, onCreated, token }) {
         body: JSON.stringify({
           fullName: fullName.trim(),
           username: username.trim(),
+          email: email.trim(),
           password,
           roleId,
           privileges,
@@ -110,6 +112,10 @@ function NewEmployeeModal({ catalog, roles, onClose, onCreated, token }) {
             <div className="field">
               <div className="fl">Username</div>
               <input value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="field">
+              <div className="fl">Email <span className="opt">(needed for Google sign-in)</span></div>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="field">
               <div className="fl">Temporary password</div>
@@ -384,7 +390,32 @@ function ResetPasswordModal({ employee, onClose, onSaved, token }) {
   );
 }
 
-function EmployeePreviewModal({ employee, catalog, onClose, onEditPrivileges, onResetPassword }) {
+function EmployeePreviewModal({ employee, catalog, token, onClose, onSaved, onEditPrivileges, onResetPassword }) {
+  const [email, setEmail] = useState(employee.email || "");
+  const [emailError, setEmailError] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  async function saveEmail() {
+    setEmailError("");
+    setSavingEmail(true);
+    try {
+      const res = await apiCall(`/api/employees/${employee.id}/email/`, {
+        method: 'PATCH',
+        headers: token ? { Authorization: `Token ${token}` } : {},
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailError(data.error || "Failed to save email"); return; }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setEmailError("Network error saving email");
+      console.error(err);
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   return (
     <div className="overlay active">
       <div className="modal">
@@ -395,7 +426,16 @@ function EmployeePreviewModal({ employee, catalog, onClose, onEditPrivileges, on
         <div className="modal-body">
           <div className="field-grid">
             <div className="field"><div className="fl">Username</div><div className="fv mono">{employee.username}</div></div>
-            <div className="field"><div className="fl">Email</div><div className="fv">{employee.email || <span style={{ color: "var(--text-3)" }}>—</span>}</div></div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <div className="fl">Email (used for Google sign-in)</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button className="btn btn-sm btn-brass" onClick={saveEmail} disabled={savingEmail || email.trim() === (employee.email || "")}>
+                  {savingEmail ? "Saving..." : "Save"}
+                </button>
+              </div>
+              {emailError && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 4 }}>{emailError}</div>}
+            </div>
             <div className="field"><div className="fl">Role</div><div className="fv">{employee.roleName}</div></div>
             <div className="field"><div className="fl">Status</div><span className={`stamp ${employee.isActive ? "paid" : "cancelled"}`}>{employee.isActive ? "Active" : "Inactive"}</span></div>
             <div className="field"><div className="fl">Last password change</div><div className="fv">{employee.lastPasswordChangedBy || <span style={{ color: "var(--text-3)" }}>—</span>}</div></div>
@@ -663,7 +703,9 @@ export default function Employees({ role, token }) {
         <EmployeePreviewModal
           employee={previewEmployee}
           catalog={catalog}
+          token={token}
           onClose={() => setPreviewEmployee(null)}
+          onSaved={fetchAll}
           onEditPrivileges={() => { setEditingEmployee(previewEmployee); setPreviewEmployee(null); }}
           onResetPassword={() => { setResetPwEmployee(previewEmployee); setPreviewEmployee(null); }}
         />

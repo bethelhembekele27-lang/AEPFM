@@ -1,4 +1,6 @@
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,6 +11,23 @@ from .models import StaffProfile, Role
 from .serializers import EmployeeSerializer, RoleSerializer
 from .permissions import has_permission
 from .privileges import PRIVILEGE_CATALOG, PRIVILEGE_KEYS
+
+
+def _clean_email(raw, exclude_user_id=None):
+    """Returns (email, error). Empty is allowed (that employee just can't use Google)."""
+    email = (raw or '').strip().lower()
+    if not email:
+        return '', None
+    try:
+        validate_email(email)
+    except ValidationError:
+        return None, 'Enter a valid email address.'
+    qs = User.objects.filter(email__iexact=email)
+    if exclude_user_id:
+        qs = qs.exclude(id=exclude_user_id)
+    if qs.exists():
+        return None, 'Another employee already uses that email.'
+    return email, None
 
 
 class PrivilegeCatalogView(APIView):
@@ -60,18 +79,22 @@ class EmployeeListCreateView(APIView):
         password = request.data.get('password', '')
         role_id = request.data.get('roleId')
         privileges = request.data.get('privileges')
+        email = request.data.get('email', '')
 
         if not (full_name and username and password and role_id):
             return Response({'error': 'Full name, username, password, and role are required.'}, status=http_status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(username=username).exists():
             return Response({'error': 'That username is already taken.'}, status=http_status.HTTP_400_BAD_REQUEST)
+        email, email_error = _clean_email(email)
+        if email_error:
+            return Response({'error': email_error}, status=http_status.HTTP_400_BAD_REQUEST)
         try:
             role = Role.objects.get(id=role_id)
         except Role.DoesNotExist:
             return Response({'error': 'Invalid role.'}, status=http_status.HTTP_400_BAD_REQUEST)
 
         first, *rest = full_name.split(' ', 1)
-        user = User.objects.create_user(username=username, password=password, first_name=first, last_name=rest[0] if rest else '')
+        user = User.objects.create_user(username=username, password=password, email=email, first_name=first, last_name=rest[0] if rest else '')
 
         final_privileges = privileges if privileges is not None else role.defaultPrivileges
         invalid = set(final_privileges) - PRIVILEGE_KEYS
@@ -201,6 +224,25 @@ class EmployeeResetPasswordView(APIView):
         profile.lastPasswordChangedBy = request.user
         profile.lastPasswordChange = timezone.now()
         profile.save(update_fields=['lastPasswordChangedBy', 'lastPasswordChange'])
+        return Response(EmployeeSerializer(profile).data)
+
+
+class EmployeeEmailView(APIView):
+    """PATCH /api/employees/<id>/email/ {email}: admin sets the email used for Google sign-in."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, employee_id):
+        if not has_permission(request.user, 'manage_users'):
+            return Response({'error': 'Only administrators can edit emails.'}, status=http_status.HTTP_403_FORBIDDEN)
+        try:
+            profile = StaffProfile.objects.select_related('user').get(id=employee_id)
+        except StaffProfile.DoesNotExist:
+            return Response({'error': 'Employee not found.'}, status=http_status.HTTP_404_NOT_FOUND)
+        email, err = _clean_email(request.data.get('email'), exclude_user_id=profile.user_id)
+        if err:
+            return Response({'error': err}, status=http_status.HTTP_400_BAD_REQUEST)
+        profile.user.email = email
+        profile.user.save(update_fields=['email'])
         return Response(EmployeeSerializer(profile).data)
 
 
