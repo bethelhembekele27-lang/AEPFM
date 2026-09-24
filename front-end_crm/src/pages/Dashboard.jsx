@@ -29,7 +29,6 @@ function RevenueBarList({ title, items, nameKey }) {
 
 export default function Dashboard({ role, token }) {
   const [receivedPeriod, setReceivedPeriod] = useState("today");
-  const [statusPeriod, setStatusPeriod] = useState("today");
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,10 +84,13 @@ export default function Dashboard({ role, token }) {
   const paidAuctionCount = stats.paidAuctionCount || 0;
   const outstandingCount = stats.outstandingCount || 0;
 
-  const receivedThisPeriod =
-    receivedPeriod === "today" ? parseFloat(stats.paymentsReceivedToday || 0)
-    : receivedPeriod === "week" ? parseFloat(stats.paymentsReceivedThisWeek || 0)
-    : parseFloat(stats.paymentsReceivedThisMonth || 0);
+  const receivedValues = {
+    today: stats.paymentsReceivedToday,
+    week: stats.paymentsReceivedThisWeek,
+    month: stats.paymentsReceivedThisMonth,
+    year: stats.paymentsReceivedThisYear,
+  };
+  const receivedThisPeriod = parseFloat(receivedValues[receivedPeriod] || 0);
 
   const statusCounts = {
     invoice_generated: stats.invoiceGeneratedCount || 0,
@@ -132,7 +134,6 @@ export default function Dashboard({ role, token }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="stat-label-row">
           <h3 style={{ margin: 0 }}>Invoices by status</h3>
-          <PeriodDropdown value={statusPeriod} onChange={setStatusPeriod} />
         </div>
         <div className="status-strip">
           {Object.keys(statusLabels).map((k) => (
