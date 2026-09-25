@@ -33,7 +33,7 @@ def extract_receipt_data(image_bytes, mime_type):
 
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-3.8-flash')
         response = model.generate_content([
             EXTRACTION_PROMPT,
             {'mime_type': mime_type, 'data': image_bytes},
