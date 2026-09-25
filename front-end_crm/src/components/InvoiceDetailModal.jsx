@@ -6,11 +6,49 @@ import GeneratePdfModal from "./GeneratePdfModal";
 
 const AiSparkle = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M8.4 15.6l-2.1 2.1" /></svg>);
 
-function AiBadge() {
+function AiBadge({ payment, onOpen }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6, padding: "1px 6px", borderRadius: 999, background: "var(--brass-bg)", color: "var(--brass)", fontSize: 10, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" }}>
-      <AiSparkle /> AI
+    <span
+      title="Click to view AI-extracted data"
+      onClick={() => onOpen(payment)}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 18, height: 18, borderRadius: "50%", marginLeft: 6,
+        background: "var(--blue-bg)", color: "var(--blue)", fontSize: 10, fontWeight: 700,
+        cursor: "pointer", verticalAlign: "middle",
+      }}
+    >
+      AI
     </span>
+  );
+}
+
+function ExtractionPopover({ extraction, amountPaid, onClose }) {
+  return (
+    <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-head">
+          <h3 style={{ margin: 0, fontSize: 15 }}>AI-extracted data</h3>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <div className="field-grid" style={{ marginBottom: 0, gap: "10px 20px" }}>
+            <div className="field"><div className="fl">TIN</div><div className="fv mono">{extraction.tin || "—"}</div></div>
+            <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{extraction.receiptNumber || "—"}</div></div>
+            <div className="field"><div className="fl">Date on receipt</div><div className="fv">{extraction.extractedDate || "—"}</div></div>
+            <div className="field"><div className="fl">Customer name</div><div className="fv">{extraction.customerName || "—"}</div></div>
+            <div className="field"><div className="fl">Total amount</div><div className="fv amount">{extraction.totalAmount ?? "—"}</div></div>
+            <div className="field"><div className="fl">VAT amount</div><div className="fv amount">{extraction.vatAmount ?? "—"}</div></div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}><div className="fl">Description</div><div className="fv">{extraction.description || "—"}</div></div>
+          </div>
+          {extraction.totalAmount && Number(extraction.totalAmount) !== Number(amountPaid) && (
+            <div style={{ background: "var(--amber-bg)", color: "var(--amber)", borderRadius: 8, padding: "10px 12px", marginTop: 14, fontSize: 12.5 }}>
+              Extracted total ({extraction.totalAmount}) doesn't match the recorded payment ({amountPaid}). Informational only.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -34,6 +72,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [extractionPopover, setExtractionPopover] = useState(null);
 
   const [attachments, setAttachments] = useState([]);
   const [docType, setDocType] = useState("other");
@@ -308,7 +347,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
                         <td className="amount">{money(p.amountPaid)}</td>
                         <td className="mono">{p.paymentDate}</td>
                         <td>
-                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved{p.extraction ? <AiBadge /> : ""}</span>}
+                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved{p.extraction !== undefined && p.extraction !== null && <AiBadge payment={p} onOpen={setExtractionPopover} />}</span>}
                           {p.verificationStatus === "manager_rejected" && <span className="stamp cancelled">Rejected</span>}
                           {p.verificationStatus === "pending_manager_review" && <span className="stamp pending_payment">Pending review</span>}
                           {(!p.verificationStatus || p.verificationStatus === "not_applicable") && (
@@ -391,6 +430,13 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
           invoices={[{ id: invoiceId, invoiceNumber: invoice.invoiceNumber, bidderName: invoice.bidderName, bidderNameAmharic: "", lots: invoice.lots }]}
           onConfirm={handleGeneratePdf}
           onClose={() => setShowGenerate(false)}
+        />
+      )}
+      {extractionPopover && (
+        <ExtractionPopover
+          extraction={extractionPopover.extraction}
+          amountPaid={extractionPopover.amountPaid}
+          onClose={() => setExtractionPopover(null)}
         />
       )}
     </div>
