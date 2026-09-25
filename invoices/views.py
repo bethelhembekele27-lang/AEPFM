@@ -82,10 +82,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if p.get('dateTo'):
             qs = qs.filter(dueDate__lte=p['dateTo'])
 
-        # Finance-only (verify_payment without the fuller Operations privileges)
-        # sees only Paid invoices — matches the requirement that unverified
-        # invoices should not appear for them at all, not just be filterable out.
-        if has_permission(self.request.user, 'verify_payment') and not has_permission(self.request.user, 'change_status_generic'):
+        # Finance Manager sees only Paid invoices — unverified invoices should
+        # not appear for them at all, not just be filterable out. Gated on role
+        # name because verify_payment + change_status_generic cannot distinguish
+        # Finance from Call Center (both roles ship that exact privilege pair).
+        profile = getattr(self.request.user, 'profile', None)
+        if profile is not None and profile.role.name == 'Finance Manager':
             qs = qs.filter(status='paid')
 
         return qs
