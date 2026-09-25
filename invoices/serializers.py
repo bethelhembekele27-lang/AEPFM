@@ -218,7 +218,10 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
 
     def get_payments(self, obj):
         request = self.context.get('request')
-        can_view_receipts = bool(request) and has_permission(request.user, 'manager_verify_receipt')
+        can_view_receipts = bool(request) and (
+            has_permission(request.user, 'manager_verify_receipt')
+            or has_permission(request.user, 'verify_payment')
+        )
         serializer_cls = ManagerPaymentSerializer if can_view_receipts else PaymentSerializer
         return serializer_cls(obj.payments.order_by('-uploadedAt'), many=True, context=self.context).data
 

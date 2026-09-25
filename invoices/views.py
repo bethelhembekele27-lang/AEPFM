@@ -81,6 +81,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             qs = qs.filter(dueDate__gte=p['dateFrom'])
         if p.get('dateTo'):
             qs = qs.filter(dueDate__lte=p['dateTo'])
+
+        # Finance-only (verify_payment without the fuller Operations privileges)
+        # sees only Paid invoices — matches the requirement that unverified
+        # invoices should not appear for them at all, not just be filterable out.
+        if has_permission(self.request.user, 'verify_payment') and not has_permission(self.request.user, 'change_status_generic'):
+            qs = qs.filter(status='paid')
+
         return qs
 
     def get_serializer_class(self):

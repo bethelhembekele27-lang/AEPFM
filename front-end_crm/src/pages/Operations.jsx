@@ -8,6 +8,24 @@ import DueDateCell from "../components/DueDateCell";
 import SendSmsBulkModal from "../components/SendSmsBulkModal";
 import NewWinnerModal from "../components/NewWinnerModal";
 
+function StatusChip({ color, icon, label }) {
+  const icons = {
+    sms: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
+    check: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>,
+    x: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+  };
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      fontSize: 11, fontWeight: 500, padding: "3px 8px", borderRadius: 12,
+      color: `var(--${color})`, background: `var(--${color}-bg)`, width: "fit-content",
+    }}>
+      {icons[icon]}
+      {label}
+    </span>
+  );
+}
+
 export default function Operations({ role, token, onOpenDetail, privileges }) {
   const [searchField, setSearchField] = useState("bidderName");
   const [searchValue, setSearchValue] = useState("");
@@ -22,8 +40,6 @@ export default function Operations({ role, token, onOpenDetail, privileges }) {
   const [showNewWinner, setShowNewWinner] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
-  const canFilterPaid = (privileges || []).includes("verify_payment") || (privileges || []).includes("manager_verify_receipt");
-  const [paidOnly, setPaidOnly] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
@@ -62,7 +78,7 @@ async function fetchInvoices() {
   }
 }
 
-  const rows = (filtered || invoices).filter((inv) => !paidOnly || inv.latestReceiptStatus === "manager_approved");
+  const rows = filtered || invoices;
   const searchDef = searchFieldDefs[searchField];
   const canGeneratePdf = (privileges || []).includes("generate_invoice");
 
@@ -329,15 +345,6 @@ function exportRecords() {
         )}
         <button className="btn btn-primary" onClick={runSearch}>Search</button>
         <button className="btn btn-ghost" onClick={clearSearch}>Clear</button>
-        {canFilterPaid && (
-          <button
-            className={`btn btn-sm ${paidOnly ? "btn-brass" : "btn-ghost"}`}
-            onClick={() => setPaidOnly((p) => !p)}
-            title="Toggle to show only invoices with an approved payment receipt"
-          >
-            Show paid only
-          </button>
-        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>
@@ -436,21 +443,19 @@ function exportRecords() {
                   <td><DueDateCell invoice={inv} role={role} onChangeDueDate={changeDueDate} /></td>
                   <td><StatusCell invoice={inv} role={role} privileges={privileges} onChangeStatus={changeStatus} /></td>
                   <td>
-                    {inv.smsSentAt && (
-                      <div style={{ fontSize: 11.5, color: "var(--green)" }}>
-                        SMS sent ✓ {new Date(inv.smsSentAt).toLocaleDateString()}
-                      </div>
-                    )}
-                    {inv.latestReceiptStatus === "manager_approved" && (
-                      <div style={{ fontSize: 11.5, color: "var(--green)" }}>
-                        Receipt approved ✓ {new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}
-                      </div>
-                    )}
-                    {inv.latestReceiptStatus === "manager_rejected" && (
-                      <div style={{ fontSize: 11.5, color: "var(--red)" }}>
-                        Receipt rejected ✕ {new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}
-                      </div>
-                    )}
+                    {(inv.smsSentAt || inv.latestReceiptStatus) && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {inv.smsSentAt && (
+                        <StatusChip color="blue" icon="sms" label={`SMS sent · ${new Date(inv.smsSentAt).toLocaleDateString()}`} />
+                      )}
+                      {inv.latestReceiptStatus === "manager_approved" && (
+                        <StatusChip color="green" icon="check" label={`Receipt approved · ${new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}`} />
+                      )}
+                      {inv.latestReceiptStatus === "manager_rejected" && (
+                        <StatusChip color="red" icon="x" label={`Receipt rejected · ${new Date(inv.latestReceiptReviewedAt).toLocaleDateString()}`} />
+                      )}
+                    </div>
+                  )}
                   </td>
                   </tr>
               ))}

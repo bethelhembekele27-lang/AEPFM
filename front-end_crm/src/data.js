@@ -28,7 +28,7 @@ export const navItems = [
   { key: "dashboard", label: "Financial dashboard", sub: "" },
   { key: "import", label: "Import batches", sub: "" },
   { key: "operations", label: "Operations", sub: "" },
-  { key: "receipts", label: "Receipt verification", sub: "" },
+  { key: "receipts", label: "Verify receipts", sub: "" },
   { key: "queues", label: "Operational queues", sub: "" },
   { key: "reports", label: "Reports", sub: "" },
   { key: "callcenter", label: "Call center" },
