@@ -4,6 +4,16 @@ import { apiCall, API_BASE } from "../api";
 import Stamp from "./Stamp";
 import GeneratePdfModal from "./GeneratePdfModal";
 
+const AiSparkle = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M8.4 15.6l-2.1 2.1" /></svg>);
+
+function AiBadge() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6, padding: "1px 6px", borderRadius: 999, background: "var(--brass-bg)", color: "var(--brass)", fontSize: 10, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" }}>
+      <AiSparkle /> AI
+    </span>
+  );
+}
+
 const DOC_TYPES = [
   { v: "bank_slip", l: "Bank Slip" },
   { v: "transfer_proof", l: "Transfer Proof" },
@@ -19,7 +29,7 @@ function fileUrl(path) {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
 
-export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) {
+export default function InvoiceDetailModal({ invoiceId, role, token, privileges, onClose }) {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -298,7 +308,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) 
                         <td className="amount">{money(p.amountPaid)}</td>
                         <td className="mono">{p.paymentDate}</td>
                         <td>
-                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved</span>}
+                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved{p.extraction ? <AiBadge /> : ""}</span>}
                           {p.verificationStatus === "manager_rejected" && <span className="stamp cancelled">Rejected</span>}
                           {p.verificationStatus === "pending_manager_review" && <span className="stamp pending_payment">Pending review</span>}
                           {(!p.verificationStatus || p.verificationStatus === "not_applicable") && (

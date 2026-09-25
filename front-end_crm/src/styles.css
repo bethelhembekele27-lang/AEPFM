@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
+@keyframes spin{to{transform:rotate(360deg);}}
+
 :root{
   --ink:#14171C; --paper:#EFF1EE; --panel:#FFFFFF; --border:#DEE0DA;
   --text:#1B1D1F; --text-2:#63675F; --text-3:#8B8E86;

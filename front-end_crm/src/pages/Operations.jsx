@@ -22,6 +22,8 @@ export default function Operations({ role, token, onOpenDetail, privileges }) {
   const [showNewWinner, setShowNewWinner] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
+  const canFilterPaid = (privileges || []).includes("verify_payment") || (privileges || []).includes("manager_verify_receipt");
+  const [paidOnly, setPaidOnly] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
@@ -60,7 +62,7 @@ async function fetchInvoices() {
   }
 }
 
-  const rows = filtered || invoices;
+  const rows = (filtered || invoices).filter((inv) => !paidOnly || inv.latestReceiptStatus === "manager_approved");
   const searchDef = searchFieldDefs[searchField];
   const canGeneratePdf = (privileges || []).includes("generate_invoice");
 
@@ -327,6 +329,15 @@ function exportRecords() {
         )}
         <button className="btn btn-primary" onClick={runSearch}>Search</button>
         <button className="btn btn-ghost" onClick={clearSearch}>Clear</button>
+        {canFilterPaid && (
+          <button
+            className={`btn btn-sm ${paidOnly ? "btn-brass" : "btn-ghost"}`}
+            onClick={() => setPaidOnly((p) => !p)}
+            title="Toggle to show only invoices with an approved payment receipt"
+          >
+            Show paid only
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>

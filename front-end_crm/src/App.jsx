@@ -128,6 +128,7 @@ export default function App() {
           invoiceId={detailInvoiceId}
           role={session.role}
           token={session.token}
+          privileges={session.privileges}
           onClose={() => setDetailInvoiceId(null)}
         />
       {showAccountSettings && (

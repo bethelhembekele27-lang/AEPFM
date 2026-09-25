@@ -46,7 +46,7 @@ export const pagePrivileges = {
   queues: ["view_invoices"],
   reports: ["view_reports"],
   callcenter: null,
-  receipts: ["manager_verify_receipt"],
+  receipts: ["manager_verify_receipt", "verify_payment"],
   audit: ["view_audit"],
   employees: ["manage_users"],
 };

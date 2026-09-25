@@ -28,6 +28,16 @@ const XIcon = () => (<svg width="22" height="22" viewBox="0 0 24 24" fill="none"
 const CloseIcon = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>);
 const SearchIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>);
 
+const RefreshIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>);
+const SparkleIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>);
+const WarnIcon = () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>);
+
+function ConfidenceBadge({ level }) {
+  const map = { high: "paid", medium: "pending_payment", low: "cancelled" };
+  const label = level ? level.charAt(0).toUpperCase() + level.slice(1) : "Unknown";
+  return <span className={`stamp ${map[level] || "cancelled"}`}>{label}</span>;
+}
+
 const TABS = [
   { key: "pending_manager_review", label: "Pending", sub: "Requires review", accent: "amber" },
   { key: "manager_approved", label: "Approved", sub: "Successfully verified", accent: "green" },
@@ -39,13 +49,18 @@ const EMPTY_COPY = {
   manager_rejected: "No rejected receipts.",
 };
 
-export default function ManagerReview({ role, token }) {
+export default function ManagerReview({ role, privileges, token }) {
+  const canManage = (privileges || []).includes("manager_verify_receipt");
+  const restrictedView = !canManage && (privileges || []).includes("verify_payment");
+  const canAccess = canManage || restrictedView;
+  const canDelete = role === "administrator";
+
+  const [tab, setTab] = useState(restrictedView ? "manager_approved" : "pending_manager_review");
   const [rows, setRows] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState([]);
-  const [tab, setTab] = useState("pending_manager_review");
   const [search, setSearch] = useState("");
   const [drawerRow, setDrawerRow] = useState(null);
   const [reviewing, setReviewing] = useState(null);
@@ -53,10 +68,7 @@ export default function ManagerReview({ role, token }) {
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
-  const canManage = role === "administrator" || role === "auction_manager";
-  const canDelete = role === "administrator";
-
-  useEffect(() => { if (canManage) { fetchRows(tab); fetchCounts(); } else setLoading(false); }, [tab]);
+  useEffect(() => { if (canAccess) { fetchRows(tab); fetchCounts(); } else setLoading(false); }, [tab]);
 
   async function fetchRows(status) {
     setLoading(true);
@@ -83,7 +95,10 @@ export default function ManagerReview({ role, token }) {
     } catch (err) { console.error(err); }
   }
 
-  function switchTab(t) { setTab(t); setSelected([]); setSearch(""); setDrawerRow(null); }
+  function switchTab(t) {
+    if (restrictedView && t !== "manager_approved") return;
+    setTab(t); setSelected([]); setSearch(""); setDrawerRow(null);
+  }
   function toggleRow(id) { setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]); }
   function toggleAll() { setSelected(selected.length === filteredRows.length ? [] : filteredRows.map((r) => r.id)); }
   function openReview(decision, ids) { if (!ids.length) return; setSelected(ids); setReviewing(decision); setNote(""); }
@@ -145,8 +160,8 @@ export default function ManagerReview({ role, token }) {
     }
   }
 
-  if (!canManage) {
-    return <div className="card"><h3 style={{ margin: "0 0 6px" }}>Receipt verification</h3><div className="locked-note">Only Administrators and Auction Managers can review bidder-submitted receipts.</div></div>;
+  if (!canAccess) {
+    return <div className="card"><h3 style={{ margin: "0 0 6px" }}>Receipt verification</h3><div className="locked-note">Only Administrators, Auction Managers, and Finance Managers can view receipts here.</div></div>;
   }
 
   const filteredRows = search.trim()
@@ -168,8 +183,8 @@ export default function ManagerReview({ role, token }) {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 22 }}>
-        {TABS.map((t) => {
+      <div style={{ display: "grid", gridTemplateColumns: restrictedView ? "1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 22 }}>
+        {(restrictedView ? TABS.filter((t) => t.key === "manager_approved") : TABS).map((t) => {
           const active = tab === t.key;
           const isPending = t.key === "pending_manager_review";
           return (
@@ -209,10 +224,10 @@ export default function ManagerReview({ role, token }) {
           <span style={{ fontSize: 12, color: "var(--text-2)" }}>
             {selected.length > 0 ? `${selected.length} selected` : `${filteredRows.length} record${filteredRows.length === 1 ? "" : "s"}`}
           </span>
-          {canDelete && selected.length > 0 && (
+          {canManage && canDelete && selected.length > 0 && (
             <button className="btn btn-sm btn-icon-only btn-danger" onClick={() => handleDelete(selected)} title="Delete"><TrashIcon /></button>
           )}
-          {tab === "pending_manager_review" && selected.length > 0 && (
+          {canManage && tab === "pending_manager_review" && selected.length > 0 && (
             <>
               <button className="btn btn-sm btn-brass" onClick={() => openReview("approve", selected)}>Approve</button>
               <button className="btn btn-sm btn-danger" onClick={() => openReview("reject", selected)}>Reject</button>
@@ -226,7 +241,9 @@ export default function ManagerReview({ role, token }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 32 }}><input type="checkbox" checked={filteredRows.length > 0 && selected.length === filteredRows.length} onChange={toggleAll} /></th>
+                <th style={{ width: 32 }}>
+                  {canManage && <input type="checkbox" checked={filteredRows.length > 0 && selected.length === filteredRows.length} onChange={toggleAll} />}
+                </th>
                 <th>Bidder</th><th>Invoice</th><th>Amount</th><th>{tab === "pending_manager_review" ? "Submitted" : "Reviewed"}</th>
                 {tab !== "pending_manager_review" && <th>Status</th>}
               </tr>
@@ -246,7 +263,9 @@ export default function ManagerReview({ role, token }) {
                     onClick={() => setDrawerRow(p)}
                     style={{ cursor: "pointer", background: selected.includes(p.id) ? "var(--brass-bg)" : undefined }}
                   >
-                    <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleRow(p.id)} /></td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {canManage && <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleRow(p.id)} />}
+                    </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--brass)", color: "#fff", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -334,37 +353,68 @@ export default function ManagerReview({ role, token }) {
 
             {tab === "manager_approved" && (
               <div style={{ marginTop: 20 }}>
-                <div className="fl" style={{ marginBottom: 8 }}>AI-extracted data</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div className="fl" style={{ margin: 0 }}>AI-extracted data</div>
+                  {drawerRow.extraction && (
+                    <button
+                      className="btn btn-sm btn-icon-only"
+                      title="Re-extract"
+                      onClick={() => extractReceipt(drawerRow.id)}
+                      disabled={extracting}
+                    >
+                      {extracting ? <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid var(--border)", borderTopColor: "var(--brass)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> : <RefreshIcon />}
+                    </button>
+                  )}
+                </div>
+
                 {drawerRow.extraction ? (
-                  <div className="card" style={{ background: "var(--paper)", fontSize: 13 }}>
-                    <div>TIN: {drawerRow.extraction.tin || "—"}</div>
-                    <div>Receipt #: {drawerRow.extraction.receiptNumber || "—"}</div>
-                    <div>Date on receipt: {drawerRow.extraction.extractedDate || "—"}</div>
-                    <div>Customer: {drawerRow.extraction.customerName || "—"}</div>
-                    <div>Total: {drawerRow.extraction.totalAmount ?? "—"}</div>
-                    <div>VAT: {drawerRow.extraction.vatAmount ?? "—"}</div>
+                  <div className="card" style={{ background: "var(--paper)", padding: 16 }}>
+                    <div className="field-grid" style={{ marginBottom: 0, gap: "10px 20px" }}>
+                      <div className="field"><div className="fl">TIN</div><div className="fv mono">{drawerRow.extraction.tin || "—"}</div></div>
+                      <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{drawerRow.extraction.receiptNumber || "—"}</div></div>
+                      <div className="field"><div className="fl">Date on receipt</div><div className="fv">{drawerRow.extraction.extractedDate || "—"}</div></div>
+                      <div className="field"><div className="fl">Customer name</div><div className="fv">{drawerRow.extraction.customerName || "—"}</div></div>
+                      <div className="field"><div className="fl">Total amount</div><div className="fv amount">{drawerRow.extraction.totalAmount ?? "—"}</div></div>
+                      <div className="field"><div className="fl">VAT amount</div><div className="fv amount">{drawerRow.extraction.vatAmount ?? "—"}</div></div>
+                      <div className="field" style={{ gridColumn: "1 / -1" }}><div className="fl">Description</div><div className="fv">{drawerRow.extraction.description || "—"}</div></div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+                      <span className="fl" style={{ margin: 0 }}>Confidence</span>
+                      <ConfidenceBadge level={drawerRow.extraction.extractionConfidence} />
+                    </div>
+
                     {drawerRow.extraction.totalAmount && Number(drawerRow.extraction.totalAmount) !== Number(drawerRow.amountPaid) && (
-                      <div style={{ color: "var(--amber)", marginTop: 6 }}>
-                        Note: extracted total ({drawerRow.extraction.totalAmount}) doesn't match the recorded payment amount ({drawerRow.amountPaid}) — worth a manual look.
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "var(--amber-bg)", color: "var(--amber)", borderRadius: 8, padding: "10px 12px", marginTop: 14 }}>
+                        <WarnIcon />
+                        <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                          Extracted total (<strong>{drawerRow.extraction.totalAmount}</strong>) doesn't match the recorded payment amount (<strong>{drawerRow.amountPaid}</strong>). Worth a manual look — this is informational only.
+                        </div>
                       </div>
                     )}
-                    <div style={{ color: "var(--text-3)", marginTop: 6 }}>Confidence: {drawerRow.extraction.extractionConfidence || "unknown"}</div>
                   </div>
                 ) : (
-                  <button className="btn btn-sm" onClick={() => extractReceipt(drawerRow.id)} disabled={extracting}>
-                    {extracting ? "Extracting..." : "Extract with AI"}
+                  <button className="btn btn-sm btn-brass" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => extractReceipt(drawerRow.id)} disabled={extracting}>
+                    {extracting ? (
+                      <>
+                        <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                        Extracting...
+                      </>
+                    ) : (
+                      <><SparkleIcon /> Extract with AI</>
+                    )}
                   </button>
                 )}
               </div>
             )}
 
-            {tab === "pending_manager_review" && (
+            {canManage && tab === "pending_manager_review" && (
               <div style={{ padding: 22, borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
                 <button className="btn btn-brass" style={{ flex: 1 }} onClick={() => openReview("approve", [drawerRow.id])}>Approve receipt</button>
                 <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => openReview("reject", [drawerRow.id])}>Reject</button>
               </div>
             )}
-            {canDelete && (
+            {canManage && canDelete && (
               <div style={{ padding: "0 22px 22px" }}>
                 <button className="btn btn-ghost btn-danger" style={{ width: "100%" }} onClick={() => handleDelete([drawerRow.id])}>Delete this record</button>
               </div>

@@ -49,3 +49,47 @@ def extract_receipt_data(image_bytes, mime_type):
     except Exception as e:
         logger.exception('Gemini extraction failed')
         return None, f'Extraction failed: {e}', {}
+
+
+def run_and_save_extraction(payment, user):
+    """
+    Runs extraction and saves it, or returns (None, error_string) on
+    failure. Shared by the manual "Extract with AI" endpoint and the
+    best-effort auto-trigger on approval — callers decide what to do with
+    a failure (the manual endpoint returns it as an error response; the
+    auto-trigger on approval just logs it and moves on).
+    """
+    import mimetypes
+    from .models import ReceiptExtraction
+
+    if not payment.receiptFile:
+        return None, 'This payment has no receipt file.'
+
+    payment.receiptFile.open('rb')
+    image_bytes = payment.receiptFile.read()
+    payment.receiptFile.close()
+    mime_type = mimetypes.guess_type(payment.receiptFile.name)[0] or 'image/jpeg'
+
+    data, error, raw = extract_receipt_data(image_bytes, mime_type)
+    if error:
+        return None, error
+
+    def to_decimal(v):
+        return None if v in (None, '') else v
+
+    extraction, _ = ReceiptExtraction.objects.update_or_create(
+        payment=payment,
+        defaults={
+            'tin': data.get('tin') or '',
+            'receiptNumber': data.get('receiptNumber') or '',
+            'extractedDate': data.get('extractedDate') or '',
+            'customerName': data.get('customerName') or '',
+            'totalAmount': to_decimal(data.get('totalAmount')),
+            'vatAmount': to_decimal(data.get('vatAmount')),
+            'description': data.get('description') or '',
+            'extractionConfidence': data.get('extractionConfidence') or '',
+            'rawResponse': raw,
+            'extractedBy': user,
+        },
+    )
+    return extraction, None

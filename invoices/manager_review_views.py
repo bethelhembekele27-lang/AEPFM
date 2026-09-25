@@ -1,5 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +11,8 @@ from .models import Payment
 from .permissions import has_permission
 from .audit import log_audit
 from .sms import send_sms, normalize_phone, public_link
+
+logger = logging.getLogger(__name__)
 
 
 class PendingReceiptsView(APIView):
@@ -22,10 +26,17 @@ class PendingReceiptsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not has_permission(request.user, 'manager_verify_receipt'):
+        can_manage = has_permission(request.user, 'manager_verify_receipt')
+        can_view_approved = has_permission(request.user, 'verify_payment')
+        if not (can_manage or can_view_approved):
             return Response({'error': 'Permission denied'}, status=http_status.HTTP_403_FORBIDDEN)
 
         status_filter = request.query_params.get('verificationStatus', 'pending_manager_review')
+        # Finance-only users can never fetch pending/rejected via the API directly,
+        # even if they hand-craft the request — defense in depth beyond just hiding
+        # the tabs in ManagerReview.jsx.
+        if not can_manage and can_view_approved:
+            status_filter = 'manager_approved'
 
         qs = (
             Payment.objects
@@ -138,6 +149,16 @@ class ReceiptReviewView(APIView):
                 )
                 send_sms(phone, message)
 
+        if decision == 'approve' and settings.GEMINI_API_KEY:
+            from .receipt_extraction import run_and_save_extraction
+            try:
+                run_and_save_extraction(payment, request.user)
+            except Exception:
+                logger.exception('Auto-extraction after approval failed (non-fatal)')
+            # Deliberately never re-raised — the approval already succeeded and
+            # committed; a broken/rate-limited AI call must never look like a
+            # failed approval to the reviewer.
+
         from .serializers import ManagerPaymentSerializer
         return Response(ManagerPaymentSerializer(payment, context={'request': request}).data)
 
@@ -153,7 +174,8 @@ class ReceiptExtractView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, payment_id):
-        if not has_permission(request.user, 'manager_verify_receipt'):
+        if not (has_permission(request.user, 'manager_verify_receipt')
+                or has_permission(request.user, 'verify_payment')):
             return Response({'error': 'Permission denied'}, status=http_status.HTTP_403_FORBIDDEN)
 
         try:
@@ -169,40 +191,10 @@ class ReceiptExtractView(APIView):
         if not payment.receiptFile:
             return Response({'error': 'This payment has no receipt file.'}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        from .receipt_extraction import extract_receipt_data
-        from .models import ReceiptExtraction
-        import mimetypes
-
-        payment.receiptFile.open('rb')
-        image_bytes = payment.receiptFile.read()
-        payment.receiptFile.close()
-        mime_type = mimetypes.guess_type(payment.receiptFile.name)[0] or 'image/jpeg'
-
-        data, error, raw = extract_receipt_data(image_bytes, mime_type)
+        from .receipt_extraction import run_and_save_extraction
+        extraction, error = run_and_save_extraction(payment, request.user)
         if error:
             return Response({'error': error}, status=http_status.HTTP_502_BAD_GATEWAY)
-
-        def to_decimal(v):
-            try:
-                return None if v in (None, '') else v
-            except Exception:
-                return None
-
-        extraction, _ = ReceiptExtraction.objects.update_or_create(
-            payment=payment,
-            defaults={
-                'tin': data.get('tin') or '',
-                'receiptNumber': data.get('receiptNumber') or '',
-                'extractedDate': data.get('extractedDate') or '',
-                'customerName': data.get('customerName') or '',
-                'totalAmount': to_decimal(data.get('totalAmount')),
-                'vatAmount': to_decimal(data.get('vatAmount')),
-                'description': data.get('description') or '',
-                'extractionConfidence': data.get('extractionConfidence') or '',
-                'rawResponse': raw,
-                'extractedBy': request.user,
-            },
-        )
 
         from .serializers import ReceiptExtractionSerializer
         return Response(ReceiptExtractionSerializer(extraction).data, status=http_status.HTTP_201_CREATED)
