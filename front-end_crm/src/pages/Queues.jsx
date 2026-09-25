@@ -15,13 +15,13 @@ const queueDefs = [
   { key: "recent", label: "Recently paid", filter: (inv) => inv.status === "paid" },
 ];
 
-export default function Queues({ role, token }) {
+export default function Queues({ role, privileges, token }) {
   const [invoices, setInvoices] = useState([]);
   const [active, setActive] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const canView = role === "administrator" || role === "auction_manager" || role === "finance_manager";
+  const canView = (privileges || []).includes("view_invoices");
 
   useEffect(() => {
     if (canView) fetchInvoices();

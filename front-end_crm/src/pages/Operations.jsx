@@ -8,7 +8,7 @@ import DueDateCell from "../components/DueDateCell";
 import SendSmsBulkModal from "../components/SendSmsBulkModal";
 import NewWinnerModal from "../components/NewWinnerModal";
 
-export default function Operations({ role, token, onOpenDetail }) {
+export default function Operations({ role, token, onOpenDetail, privileges }) {
   const [searchField, setSearchField] = useState("bidderName");
   const [searchValue, setSearchValue] = useState("");
   const [searchValueTo, setSearchValueTo] = useState("");
@@ -62,7 +62,7 @@ async function fetchInvoices() {
 
   const rows = filtered || invoices;
   const searchDef = searchFieldDefs[searchField];
-  const canGeneratePdf = PDF_ROLES.includes(role);
+  const canGeneratePdf = (privileges || []).includes("generate_invoice");
 
   function runSearch() {
     if (searchField === "daterange") {
@@ -347,12 +347,14 @@ function exportRecords() {
           onClick={openGenerateModal}
         />
 
-        <button
-          className="btn btn-blue"
-          onClick={() => { if (selected.length === 0) { window.alert("Select at least one invoice first."); return; } setShowSmsBulkModal(true); }}
-        >
-          Send SMS
-        </button>
+        {(privileges || []).includes("send_sms") && (
+          <button
+            className="btn btn-blue"
+            onClick={() => { if (selected.length === 0) { window.alert("Select at least one invoice first."); return; } setShowSmsBulkModal(true); }}
+          >
+            Send SMS
+          </button>
+        )}
 
         {role === "administrator" && ( 
           <button
@@ -421,7 +423,7 @@ function exportRecords() {
                   <td className="mono">{inv.lots?.length || 0}</td>
                   <td className="amount">{money(inv.totalAmount.toFixed(2))}</td>
                   <td><DueDateCell invoice={inv} role={role} onChangeDueDate={changeDueDate} /></td>
-                  <td><StatusCell invoice={inv} role={role} onChangeStatus={changeStatus} /></td>
+                  <td><StatusCell invoice={inv} role={role} privileges={privileges} onChangeStatus={changeStatus} /></td>
                   <td>
                     {inv.smsSentAt && (
                       <div style={{ fontSize: 11.5, color: "var(--green)" }}>

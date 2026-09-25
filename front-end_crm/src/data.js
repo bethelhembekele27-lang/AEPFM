@@ -152,9 +152,9 @@ export const statusCountsByPeriod = {
 
 // Which roles may move an invoice to a new status. Locked statuses (paid/cancelled/waived)
 // can only be changed by an administrator override, matching the spec.
-export function canChangeStatus(invoice, role) {
-  if (LOCKED_STATUSES.includes(invoice.status)) return role === "administrator";
-  return role === "administrator" || role === "finance_manager";
+export function canChangeStatus(invoice, privileges, role) {
+  if (LOCKED_STATUSES.includes(invoice.status)) return role === "administrator"; // override_status stays admin-only, not in the catalog
+  return (privileges || []).includes("change_status_generic");
 }
 
 // Roles allowed to generate invoice PDFs in bulk from the Operations table.

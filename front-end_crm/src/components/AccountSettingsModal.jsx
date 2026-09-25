@@ -91,36 +91,39 @@ export default function AccountSettingsModal({ username, token, onSave, onClose 
 
           <label className="login-label">Current password <span style={{ color: "var(--text-3)", textTransform: "none" }}>(required to change password)</span></label>
           <div style={{ position: "relative", marginBottom: 14 }}>
-            <input
-              type={showOld ? "text" : "password"}
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              placeholder="Enter your current password"
-              style={{ paddingRight: 36 }}
-            />
+<input
+               type={showOld ? "text" : "password"}
+               value={oldPassword}
+               onChange={(e) => setOldPassword(e.target.value)}
+               placeholder="Enter your current password"
+               autoComplete="current-password"
+               style={{ paddingRight: 36 }}
+             />
             <EyeToggleButton show={showOld} onToggle={() => setShowOld((s) => !s)} />
           </div>
 
           <label className="login-label">New password <span style={{ color: "var(--text-3)", textTransform: "none" }}>(leave blank to keep current)</span></label>
           <div style={{ position: "relative", marginBottom: 14 }}>
-            <input
-              type={showNew ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              style={{ paddingRight: 36 }}
-            />
+<input
+               type={showNew ? "text" : "password"}
+               value={newPassword}
+               onChange={(e) => setNewPassword(e.target.value)}
+               placeholder="Enter new password"
+               autoComplete="new-password"
+               style={{ paddingRight: 36 }}
+             />
             <EyeToggleButton show={showNew} onToggle={() => setShowNew((s) => !s)} />
           </div>
 
           <label className="login-label">Confirm new password</label>
-          <input
-            type={showNew ? "text" : "password"}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm new password"
-            style={{ marginBottom: 14 }}
-          />
+<input
+             type={showNew ? "text" : "password"}
+             value={confirmPassword}
+             onChange={(e) => setConfirmPassword(e.target.value)}
+             placeholder="Confirm new password"
+             autoComplete="new-password"
+             style={{ marginBottom: 14 }}
+           />
 
           {error && <div className="login-error" style={{ marginBottom: 12 }}>{error}</div>}
           {saved && <div className="login-success" style={{ marginBottom: 12 }}>Saved.</div>}

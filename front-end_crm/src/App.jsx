@@ -106,6 +106,7 @@ export default function App() {
           {page === "operations" && !smsInvoiceId && (
             <Operations
               role={session.role}
+              privileges={session.privileges}
               token={session.token}
               onOpenDetail={setDetailInvoiceId}
               onOpenSms={setSmsInvoiceId}
@@ -115,7 +116,7 @@ export default function App() {
             <SendSms invoiceId={smsInvoiceId} onBack={() => setSmsInvoiceId(null)} />
           )}
           {page === "dashboard" && <Dashboard role={session.role} token={session.token} />}
-          {page === "queues" && <Queues role={session.role} token={session.token} />}
+          {page === "queues" && <Queues role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "reports" && <Reports role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "callcenter" && <CallCenter role={session.role} token={session.token} />}
           {page === "receipts" && <ManagerReview role={session.role} token={session.token} />}

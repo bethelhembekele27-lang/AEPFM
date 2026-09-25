@@ -2,9 +2,9 @@ import { useState } from "react";
 import { statusLabels, canChangeStatus } from "../data";
 import Stamp from "./Stamp";
 
-export default function StatusCell({ invoice, role, onChangeStatus }) {
+export default function StatusCell({ invoice, role, privileges, onChangeStatus }) {
   const [editing, setEditing] = useState(false);
-  const editable = canChangeStatus(invoice, role);
+  const editable = canChangeStatus(invoice, privileges, role);
 
   if (editing) {
     return (

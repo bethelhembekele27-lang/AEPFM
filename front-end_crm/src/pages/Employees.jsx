@@ -125,6 +125,7 @@ function NewEmployeeModal({ catalog, roles, onClose, onCreated, token }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter a temporary password"
+                  autoComplete="new-password"
                   style={{ paddingRight: 36 }}
                 />
                 <EyeToggleButton show={showPassword} onToggle={() => setShowPassword((s) => !s)} />
@@ -363,6 +364,7 @@ function ResetPasswordModal({ employee, onClose, onSaved, token }) {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password"
+                autoComplete="new-password"
                 style={{ paddingRight: 36 }}
               />
               <EyeToggleButton show={show} onToggle={() => setShow((s) => !s)} />
@@ -375,6 +377,7 @@ function ResetPasswordModal({ employee, onClose, onSaved, token }) {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Confirm new password"
+              autoComplete="new-password"
             />
           </div>
           {error && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 13 }}>{error}</div>}
