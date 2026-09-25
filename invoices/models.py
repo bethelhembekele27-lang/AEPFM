@@ -410,3 +410,31 @@ class GeneratedReport(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.generatedAt:%Y-%m-%d %H:%M}"
+
+
+class ReceiptExtraction(models.Model):
+    """
+    AI-extracted data from a Payment's receipt image, run manually by a
+    reviewer AFTER the receipt is already manager_approved — this is
+    record-keeping / auto-fill, not a decision aid, so it never blocks or
+    influences the approve/reject step itself. Kept as its own model
+    rather than fields on Payment because this data is fallible AI
+    output, not trusted system data: keeping it separate makes it easy to
+    re-run extraction, compare attempts, or ignore it entirely without
+    touching the real payment record.
+    """
+    payment = models.OneToOneField(Payment, on_delete=models.CASCADE, related_name='extraction')
+    tin = models.CharField(max_length=50, blank=True, default='')
+    receiptNumber = models.CharField(max_length=100, blank=True, default='')
+    extractedDate = models.CharField(max_length=100, blank=True, default='', help_text="As printed on the receipt — no calendar conversion is done, may be Ethiopian or Gregorian.")
+    customerName = models.CharField(max_length=255, blank=True, default='')
+    totalAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    vatAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    description = models.TextField(blank=True, default='')
+    extractionConfidence = models.CharField(max_length=20, blank=True, default='')  # 'high' / 'medium' / 'low', model's own self-report
+    rawResponse = models.JSONField(default=dict, blank=True)
+    extractedAt = models.DateTimeField(auto_now_add=True)
+    extractedBy = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Extraction for payment #{self.payment_id}"

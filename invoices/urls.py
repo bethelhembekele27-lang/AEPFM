@@ -6,7 +6,7 @@ from .views import (
     AttachmentDeleteView, PaymentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
     OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
 )
-from .manager_review_views import PendingReceiptsView, ReceiptReviewView
+from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView
 
 from .import_views import (
     ImportBatchViewSet, ImportBatchPreviewView, ImportBatchConfirmView,
@@ -36,6 +36,7 @@ urlpatterns = [
 
     path('receipts/', PendingReceiptsView.as_view(), name='receipts-pending'),
     path('receipts/<int:payment_id>/review/', ReceiptReviewView.as_view(), name='receipt-review'),
+    path('receipts/<int:payment_id>/extract/', ReceiptExtractView.as_view(), name='receipt-extract'),
 
     path('', include(router.urls)),
 ]

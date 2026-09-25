@@ -8,7 +8,7 @@ from google.auth.exceptions import GoogleAuthError
 
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
-    Invoice, InvoiceLot, Payment, Attachment, AuditLog, OfficeSettings,
+    Invoice, InvoiceLot, Payment, Attachment, AuditLog, OfficeSettings, ReceiptExtraction,
 )
 from .permissions import has_permission
 
@@ -405,6 +405,15 @@ class OfficeSettingsSerializer(serializers.ModelSerializer):
 
 # ------------------------------------------ Manager receipt-review queue
 
+class ReceiptExtractionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptExtraction
+        fields = [
+            'tin', 'receiptNumber', 'extractedDate', 'customerName',
+            'totalAmount', 'vatAmount', 'description', 'extractionConfidence', 'extractedAt',
+        ]
+
+
 class ManagerPaymentSerializer(PaymentSerializer):
     """
     Extended PaymentSerializer for the manager receipt-review queue.
@@ -429,7 +438,16 @@ class ManagerPaymentSerializer(PaymentSerializer):
             'managerVerifiedBy',
             'managerVerifiedDate',
             'submittedViaPublicLink',
+            'extraction',
         ]
+
+    extraction = serializers.SerializerMethodField()
+
+    def get_extraction(self, obj):
+        try:
+            return ReceiptExtractionSerializer(obj.extraction).data
+        except ReceiptExtraction.DoesNotExist:
+            return None
 
     def get_receiptUrl(self, obj):
         if not obj.receiptFile:

@@ -140,3 +140,69 @@ class ReceiptReviewView(APIView):
 
         from .serializers import ManagerPaymentSerializer
         return Response(ManagerPaymentSerializer(payment, context={'request': request}).data)
+
+
+class ReceiptExtractView(APIView):
+    """
+    POST /api/receipts/<payment_id>/extract/
+    Manual trigger only — never automatic. Only works on a receipt that
+    is already manager_approved (record-keeping/auto-fill, not a
+    pre-approval decision aid). Re-running overwrites the previous
+    extraction for this payment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, payment_id):
+        if not has_permission(request.user, 'manager_verify_receipt'):
+            return Response({'error': 'Permission denied'}, status=http_status.HTTP_403_FORBIDDEN)
+
+        try:
+            payment = Payment.objects.select_related('invoice').get(pk=payment_id)
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment not found'}, status=http_status.HTTP_404_NOT_FOUND)
+
+        if payment.verificationStatus != 'manager_approved':
+            return Response(
+                {'error': 'AI extraction only runs on receipts that are already approved.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        if not payment.receiptFile:
+            return Response({'error': 'This payment has no receipt file.'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+        from .receipt_extraction import extract_receipt_data
+        from .models import ReceiptExtraction
+        import mimetypes
+
+        payment.receiptFile.open('rb')
+        image_bytes = payment.receiptFile.read()
+        payment.receiptFile.close()
+        mime_type = mimetypes.guess_type(payment.receiptFile.name)[0] or 'image/jpeg'
+
+        data, error, raw = extract_receipt_data(image_bytes, mime_type)
+        if error:
+            return Response({'error': error}, status=http_status.HTTP_502_BAD_GATEWAY)
+
+        def to_decimal(v):
+            try:
+                return None if v in (None, '') else v
+            except Exception:
+                return None
+
+        extraction, _ = ReceiptExtraction.objects.update_or_create(
+            payment=payment,
+            defaults={
+                'tin': data.get('tin') or '',
+                'receiptNumber': data.get('receiptNumber') or '',
+                'extractedDate': data.get('extractedDate') or '',
+                'customerName': data.get('customerName') or '',
+                'totalAmount': to_decimal(data.get('totalAmount')),
+                'vatAmount': to_decimal(data.get('vatAmount')),
+                'description': data.get('description') or '',
+                'extractionConfidence': data.get('extractionConfidence') or '',
+                'rawResponse': raw,
+                'extractedBy': request.user,
+            },
+        )
+
+        from .serializers import ReceiptExtractionSerializer
+        return Response(ReceiptExtractionSerializer(extraction).data, status=http_status.HTTP_201_CREATED)

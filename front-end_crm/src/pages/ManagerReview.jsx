@@ -51,6 +51,7 @@ export default function ManagerReview({ role, token }) {
   const [reviewing, setReviewing] = useState(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   const canManage = role === "administrator" || role === "auction_manager";
   const canDelete = role === "administrator";
@@ -122,6 +123,25 @@ export default function ManagerReview({ role, token }) {
     } catch (err) {
       window.alert("Failed to delete one or more records");
       console.error(err);
+    }
+  }
+
+  async function extractReceipt(paymentId) {
+    setExtracting(true);
+    try {
+      const res = await apiCall(`/api/receipts/${paymentId}/extract/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Token ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) { window.alert(data.error || "Extraction failed"); return; }
+      setDrawerRow((r) => ({ ...r, extraction: data }));
+      setRows((prev) => prev.map((r) => (r.id === paymentId ? { ...r, extraction: data } : r)));
+    } catch (err) {
+      window.alert("Network error during extraction");
+      console.error(err);
+    } finally {
+      setExtracting(false);
     }
   }
 
@@ -311,6 +331,32 @@ export default function ManagerReview({ role, token }) {
                 )
               ) : <div className="locked-note" style={{ marginTop: 0 }}>No receipt file.</div>}
             </div>
+
+            {tab === "manager_approved" && (
+              <div style={{ marginTop: 20 }}>
+                <div className="fl" style={{ marginBottom: 8 }}>AI-extracted data</div>
+                {drawerRow.extraction ? (
+                  <div className="card" style={{ background: "var(--paper)", fontSize: 13 }}>
+                    <div>TIN: {drawerRow.extraction.tin || "—"}</div>
+                    <div>Receipt #: {drawerRow.extraction.receiptNumber || "—"}</div>
+                    <div>Date on receipt: {drawerRow.extraction.extractedDate || "—"}</div>
+                    <div>Customer: {drawerRow.extraction.customerName || "—"}</div>
+                    <div>Total: {drawerRow.extraction.totalAmount ?? "—"}</div>
+                    <div>VAT: {drawerRow.extraction.vatAmount ?? "—"}</div>
+                    {drawerRow.extraction.totalAmount && Number(drawerRow.extraction.totalAmount) !== Number(drawerRow.amountPaid) && (
+                      <div style={{ color: "var(--amber)", marginTop: 6 }}>
+                        Note: extracted total ({drawerRow.extraction.totalAmount}) doesn't match the recorded payment amount ({drawerRow.amountPaid}) — worth a manual look.
+                      </div>
+                    )}
+                    <div style={{ color: "var(--text-3)", marginTop: 6 }}>Confidence: {drawerRow.extraction.extractionConfidence || "unknown"}</div>
+                  </div>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => extractReceipt(drawerRow.id)} disabled={extracting}>
+                    {extracting ? "Extracting..." : "Extract with AI"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {tab === "pending_manager_review" && (
               <div style={{ padding: 22, borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>

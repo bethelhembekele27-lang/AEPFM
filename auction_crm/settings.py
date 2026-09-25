@@ -170,6 +170,8 @@ TEXTBEE_API_KEY = config("TEXTBEE_API_KEY", default="")
 TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
 # --- Google OAuth (Phase 7) ---
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
+# --- Gemini receipt extraction (Phase 9) ---
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 # --- Cron (Phase 4) ---
 # Shared secret for the external daily pinger that hits POST /api/cron/flag-overdue/.
 # Empty means the endpoint always answers 403, so nothing runs unprompted.
