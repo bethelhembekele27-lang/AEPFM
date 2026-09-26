@@ -24,6 +24,7 @@ PRIVILEGE_CATALOG = [
     {'key': 'send_sms', 'label': 'Send invoice SMS to bidders', 'category': 'Processing Fees'},
     {'key': 'delete_records', 'label': 'Delete invoices, batches, and records', 'category': 'Administration'},
     {'key': 'extend_due_date', 'label': 'Extend invoice due dates', 'category': 'Processing Fees'},
+    {'key': 'upload_payment_proof', 'label': 'Upload payment proof for an invoice', 'category': 'Processing Fees'},
 ]
 
 PRIVILEGE_KEYS = {p['key'] for p in PRIVILEGE_CATALOG}
@@ -41,7 +42,7 @@ BUILT_IN_ROLE_DEFAULTS = {
     'CRM / Call Center Officer': [
         'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic', 'verify_payment',
         'manage_call_center', 'view_call_center_dashboard', 'view_reports', 'send_sms',
-        'delete_records', 'extend_due_date',
+        'delete_records', 'extend_due_date', 'upload_payment_proof',
     ],
     'Viewer': ['view_invoices', 'view_dashboard'],
 }

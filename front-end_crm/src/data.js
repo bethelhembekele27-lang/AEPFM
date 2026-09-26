@@ -157,27 +157,29 @@ export function canChangeStatus(invoice, privileges, role) {
   return (privileges || []).includes("change_status_generic");
 }
 
-// Roles allowed to generate invoice PDFs in bulk from the Operations table.
-export const PDF_ROLES = ["administrator", "auction_manager"];
-
 // Permission logic for the action buttons on an invoice (Verify, Reject,
 // Mark paid, etc). Lives here alongside canChangeStatus since both are
 // permission/data logic, not presentational — ActionButton.jsx only holds
 // the actual <button> components now.
-export function actionDefsFor(inv) {
+//
+// Entries carry either `privKey` (checked against session privileges) or an
+// explicit `roleOnly`/`roles` marker for the few actions that still have no
+// catalog key. Grep for "roleOnly:" or "roles:" to list what is deliberately
+// still role-gated.
+export function actionDefsFor(inv, privileges, role) {
   if (LOCKED_STATUSES.includes(inv.status)) {
-    return [{ label: "Override status", roles: ["administrator"] }];
+    return [{ label: "Override status", roleOnly: true }];
   }
   const btns = [];
-  if (inv.status === "invoice_generated") btns.push({ label: "Generate invoice PDF", roles: ["administrator", "auction_manager"] });
-  if (inv.status === "invoice_generated" || inv.status === "pending_payment") btns.push({ label: "Upload receipt", roles: ["administrator", "auction_manager"] });
+  if (inv.status === "invoice_generated") btns.push({ label: "Generate invoice PDF", privKey: "generate_invoice" });
+  if (inv.status === "invoice_generated" || inv.status === "pending_payment") btns.push({ label: "Upload receipt", privKey: "upload_payment_proof" });
   if (inv.status === "payment_submitted") {
-    btns.push({ label: "Verify transaction", roles: ["administrator", "finance_manager"] });
-    btns.push({ label: "Reject", roles: ["administrator", "finance_manager"] });
+    btns.push({ label: "Verify transaction", privKey: "change_status_generic" });
+    btns.push({ label: "Reject", privKey: "change_status_generic" });
   }
-  btns.push({ label: "Mark paid", roles: ["administrator", "finance_manager"] });
-  btns.push({ label: "Mark overdue", roles: ["administrator", "finance_manager"] });
-  if (inv.status === "overdue") btns.push({ label: "Extend due date", roles: ["administrator"] });
+  btns.push({ label: "Mark paid", privKey: "change_status_generic" });
+  btns.push({ label: "Mark overdue", privKey: "change_status_generic" });
+  if (inv.status === "overdue") btns.push({ label: "Extend due date", privKey: "extend_due_date" });
   btns.push({ label: "Remarks", roles: ["administrator", "auction_manager", "finance_manager", "call_operator"] });
   return btns;
 }

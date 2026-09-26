@@ -5,7 +5,7 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 # administrator / auction_manager / finance_manager / call_operator / viewer
 # ---------------------------------------------------------------------------
 ROLE_PERMISSIONS = {
-    'generate_invoice':      ['administrator', 'auction_manager'],   # her PDF_ROLES
+    'generate_invoice':      ['administrator', 'auction_manager'],
     'upload_payment_proof':  ['administrator', 'auction_manager'],   # her "Upload receipt" button
     'verify_payment':        ['administrator', 'finance_manager'],
     'manager_verify_receipt': ['administrator', 'auction_manager'],  # reviewing bidder-submitted receipts, Phase 1

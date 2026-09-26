@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LOCKED_STATUSES, PDF_ROLES, searchFieldDefs, money } from "../data";
+import { LOCKED_STATUSES, searchFieldDefs, money } from "../data";
 import { ActionBtn } from "../components/ActionButton";
 import StatusCell from "../components/StatusCell";
 import GeneratePdfModal from "../components/GeneratePdfModal";
@@ -360,8 +360,8 @@ function exportRecords() {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <ActionBtn
           label="Generate invoice PDF"
-          roles={PDF_ROLES}
-          role={role}
+          privKey="generate_invoice"
+          privileges={privileges}
           onClick={openGenerateModal}
         />
 

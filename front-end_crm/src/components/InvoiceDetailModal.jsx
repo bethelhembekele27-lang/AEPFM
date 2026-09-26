@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LOCKED_STATUSES, PDF_ROLES, money } from "../data";
+import { LOCKED_STATUSES, money } from "../data";
 import { apiCall, API_BASE } from "../api";
 import Stamp from "./Stamp";
 import GeneratePdfModal from "./GeneratePdfModal";
@@ -87,7 +87,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const canUpload = role === "administrator" || role === "auction_manager"; // upload_payment_proof — no catalog key yet
+  const canUpload = (privileges || []).includes("upload_payment_proof");
   const canDelete = role === "administrator"; // delete_records — no catalog key yet
   const canEdit = (privileges || []).includes("edit_invoice");
 
@@ -260,7 +260,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   );
 
   const locked = LOCKED_STATUSES.includes(invoice.status);
-  const canGeneratePdf = PDF_ROLES.includes(role) && !locked;
+  const canGeneratePdf = (privileges || []).includes("generate_invoice") && !locked;
 
   return (
     <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
