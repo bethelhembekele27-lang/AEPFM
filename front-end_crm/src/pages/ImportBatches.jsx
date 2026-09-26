@@ -161,7 +161,7 @@ export default function ImportBatches({ role, token, privileges }) {
         </div>
         <div className="upload-form">
           <div className="full">
-            <label>Bid data report <span className="req">*</span> — .xlsx only</label>
+            <label>Bid data report <span className="req">*</span> — .xlsx, .xls, or .csv</label>
             <div
               className="filedrop"
               onDragOver={(e) => e.preventDefault()}
@@ -172,11 +172,11 @@ export default function ImportBatches({ role, token, privileges }) {
               onClick={() => fileInputRef.current?.click()}
               style={{ cursor: 'pointer' }}
             >
-              {file ? file.name : "bid_data_report.xlsx — drag file here or click to browse"}
+              {file ? file.name : "bid_data_report.xlsx/.xls/.csv — drag file here or click to browse"}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx"
+                accept=".xlsx,.xls,.csv"
                 onChange={(e) => setFile(e.target.files?.[0])}
                 style={{ display: 'none' }}
               />

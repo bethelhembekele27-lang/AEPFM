@@ -1,8 +1,11 @@
+import csv
+import io
 import re
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
+import xlrd  # legacy .xls only; openpyxl handles .xlsx
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets, status, mixins
@@ -175,7 +178,39 @@ def _jsonable(value):
     return value
 
 
-def parse_bid_report(file_obj):
+def _read_rows_any_format(file_obj, filename):
+    """
+    Returns a list of rows (each a list of cell values), first row = header.
+    Dispatches on file extension rather than sniffing content: the frontend
+    restricts the file picker, so the extension is a reliable signal and we
+    avoid reading every upload twice.
+
+    Note on .xls dates: xlrd returns raw Excel serial numbers (e.g. 45678.0)
+    for date cells rather than datetime objects, unlike openpyxl. That flows
+    into parse_submitted_at's string path and yields None rather than a wrong
+    date. If real .xls files show missing dates, add xlrd.xldate_as_tuple
+    conversion here.
+    """
+    name = (filename or '').lower()
+
+    if name.endswith('.csv'):
+        text = file_obj.read()
+        if isinstance(text, bytes):
+            text = text.decode('utf-8-sig')  # strips Excel's UTF-8 BOM on CSV export
+        return list(csv.reader(io.StringIO(text)))
+
+    if name.endswith('.xls'):
+        book = xlrd.open_workbook(file_contents=file_obj.read())
+        sheet = book.sheet_by_index(0)
+        return [sheet.row_values(r) for r in range(sheet.nrows)]
+
+    # default: .xlsx
+    wb = openpyxl.load_workbook(file_obj, data_only=True)
+    sheet = wb.active
+    return [[cell.value for cell in row] for row in sheet.iter_rows()]
+
+
+def parse_bid_report(file_obj, filename=''):
     """
     Reads the header row, resolves each of the required/optional fields
     to whichever column actually carries it (via FIELD_ALIASES), and
@@ -197,9 +232,11 @@ def parse_bid_report(file_obj):
     Returns (rows, column_mapping, error_message). On error, rows and
     column_mapping are both None.
     """
-    wb = openpyxl.load_workbook(file_obj, data_only=True)
-    sheet = wb.active
-    raw_header_row = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    all_rows = _read_rows_any_format(file_obj, filename)
+    if not all_rows:
+        return None, None, "The file is empty."
+
+    raw_header_row = all_rows[0]
     header_row = [_normalize_header(h) for h in raw_header_row]
 
     col_index_by_field, missing_required = _resolve_columns(header_row)
@@ -217,7 +254,7 @@ def parse_bid_report(file_obj):
     }
 
     rows = []
-    for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+    for row_number, row in enumerate(all_rows[1:], start=2):
         bidder_name = _get_cell(row, col_index_by_field, 'bidderName')
         phone = _get_cell(row, col_index_by_field, 'winnerPhone')
 
@@ -281,7 +318,7 @@ class ImportBatchPreviewView(APIView):
         if not company_name or not auction_date:
             return Response({'error': 'companyName and auctionDate are required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        rows, column_mapping, header_error = parse_bid_report(file_obj)
+        rows, column_mapping, header_error = parse_bid_report(file_obj, file_obj.name)
         if header_error:
             return Response({'error': header_error}, status=status.HTTP_400_BAD_REQUEST)
 
