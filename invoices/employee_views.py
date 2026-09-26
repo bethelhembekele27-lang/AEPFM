@@ -158,6 +158,8 @@ class EmployeeBulkDeactivateView(APIView):
             return Response({'error': 'Only administrators can deactivate employees.'}, status=http_status.HTTP_403_FORBIDDEN)
         ids = request.data.get('employeeIds', [])
         profiles = StaffProfile.objects.filter(id__in=ids)
+        if profiles.filter(user_id=request.user.id).exists():
+            return Response({'error': "You can't deactivate your own account."}, status=http_status.HTTP_400_BAD_REQUEST)
         n = 0
         for profile in profiles:
             profile.isActive = False
