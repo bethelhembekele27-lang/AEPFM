@@ -25,6 +25,7 @@ PRIVILEGE_CATALOG = [
     {'key': 'delete_records', 'label': 'Delete invoices, batches, and records', 'category': 'Administration'},
     {'key': 'extend_due_date', 'label': 'Extend invoice due dates', 'category': 'Processing Fees'},
     {'key': 'upload_payment_proof', 'label': 'Upload payment proof for an invoice', 'category': 'Processing Fees'},
+    {'key': 'view_paid_only', 'label': 'Restricted to Paid invoices only (Finance-style filtering)', 'category': 'Processing Fees'},
 ]
 
 PRIVILEGE_KEYS = {p['key'] for p in PRIVILEGE_CATALOG}
@@ -37,7 +38,7 @@ BUILT_IN_ROLE_DEFAULTS = {
     ],
     'Finance Manager': [
         'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic', 'verify_payment',
-        'view_dashboard', 'view_reports', 'view_audit',
+        'view_dashboard', 'view_reports', 'view_audit', 'view_paid_only',
     ],
     'CRM / Call Center Officer': [
         'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic', 'verify_payment',

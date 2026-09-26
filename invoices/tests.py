@@ -52,7 +52,7 @@ class PrivilegeGateTests(APITestCase):
         self.viewer = make_user('viewer_t', 'Viewer', ['view_invoices', 'view_dashboard'])
         self.finance = make_user('finance_t', 'Finance Manager', [
             'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic',
-            'verify_payment', 'view_dashboard', 'view_reports', 'view_audit',
+            'verify_payment', 'view_dashboard', 'view_reports', 'view_audit', 'view_paid_only',
         ])
         self.call_op = make_user('callop_t', 'CRM / Call Center Officer', [
             'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic',
