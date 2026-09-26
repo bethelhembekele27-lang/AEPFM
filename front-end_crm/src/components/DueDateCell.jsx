@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-export default function DueDateCell({ invoice, role, onChangeDueDate }) {
+export default function DueDateCell({ invoice, role, privileges, onChangeDueDate }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(invoice.dueDate);
-  const editable = role === "administrator";
+  const editable = (privileges || []).includes("extend_due_date");
 
   if (editing) {
     return (

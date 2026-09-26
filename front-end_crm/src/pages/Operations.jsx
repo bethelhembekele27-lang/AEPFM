@@ -223,7 +223,7 @@ async function fetchInvoices() {
     }
   }
   
-const canDelete = role === "administrator";
+const canDelete = (privileges || []).includes("delete_records");
 const [showBulkUpdate, setShowBulkUpdate] = useState(false);
 
 async function deleteSelected() {
@@ -440,7 +440,7 @@ function exportRecords() {
                   <td>{inv.auctionCompany || <span style={{ color: "var(--text-3)" }}>—</span>}</td>
                   <td className="mono">{inv.lots?.length || 0}</td>
                   <td className="amount">{money(inv.totalAmount.toFixed(2))}</td>
-                  <td><DueDateCell invoice={inv} role={role} onChangeDueDate={changeDueDate} /></td>
+                  <td><DueDateCell invoice={inv} role={role} privileges={privileges} onChangeDueDate={changeDueDate} /></td>
                   <td><StatusCell invoice={inv} role={role} privileges={privileges} onChangeStatus={changeStatus} /></td>
                   <td>
                     {(inv.smsSentAt || inv.latestReceiptStatus) && (
