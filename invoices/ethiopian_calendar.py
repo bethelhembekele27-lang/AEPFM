@@ -10,15 +10,22 @@ It was cross-checked against a JDN-based reference implementation for
 Ethiopian New Year across 2013-2019 EC (including the leap-year case
 1 Meskerem 2016 EC = 12 Sept 2023) and matched on every anchor.
 
-IMPORTANT CAVEAT — this is a heuristic, not a determination. A printed
-date like "23/01/2026" is ambiguous: it could be 23 Jan 2026 Gregorian, or
-1 Tikimt 2026 Ethiopian (= 3 Oct 2033 Gregorian). Receipts in Ethiopia use
-both calendars, and nothing on the image reliably distinguishes them. The
-only reliable signal is that a receipt is a historical document, so a
-conversion landing far in the future is almost certainly a misread of a
-Gregorian date. `_is_plausible` uses that to decline converting rather
-than store a confidently wrong date. When in doubt we return None and the
-UI shows only the raw text as printed.
+IMPORTANT CAVEAT — this is a heuristic, not a determination. Receipts in
+Ethiopia use both calendars, and nothing on the image reliably
+distinguishes them. What we do have is a strong prior on the YEAR:
+Ethiopian runs ~7-8 years behind Gregorian, so a receipt printed around
+"now" carries an Ethiopian year around 2017-2019. A 4-digit 2020s year is
+therefore almost certainly already Gregorian — clean computer-generated
+invoices from corporate billing systems (the Ethio Telecom one, for
+example) print Gregorian dates directly. parse_and_convert declines to
+convert those rather than silently producing a real-but-wrong future
+date, since 2026 Ethiopian is 2033 Gregorian.
+
+Residual ambiguity this does NOT resolve: a genuine Ethiopian date in the
+current Ethiopian year can still convert to a date a few months ahead
+(current EC year 2019 began 11 Sept 2026, so its later months land in
+2027). We accept that, because the raw text is always shown alongside the
+converted value for a human to check.
 """
 import re
 from datetime import date, timedelta
@@ -48,20 +55,19 @@ def ethiopian_to_gregorian(eth_year, eth_month, eth_day):
     return new_year + timedelta(days=day_of_eth_year)
 
 
-def _is_plausible(gregorian_date):
-    """
-    Reject conversions that land too far in the future. A receipt documents
-    a payment that already happened, so anything more than a year ahead
-    means we misread a Gregorian date as Ethiopian.
-    """
-    return gregorian_date <= date.today() + timedelta(days=365)
-
-
 def parse_and_convert(raw_text):
     """
     Best-effort conversion of a printed date like '16/12/18' or '16/12/2018'
     (dd/mm/yy or dd/mm/yyyy), read as Ethiopian. Returns an ISO date string,
-    or None if it doesn't parse or the result isn't plausible.
+    or None if it doesn't parse or the year is implausible as Ethiopian.
+
+    A 4-digit year in the 2020s is almost certainly ALREADY Gregorian:
+    Ethiopian years run ~7-8 behind Gregorian, so a receipt printed around
+    "now" reads as 2017-2019 Ethiopian, not 2020+. Corporate billing systems
+    (the Ethio Telecom invoice, for one) print Gregorian dates directly.
+    Attempting to convert those as if they were Ethiopian silently produces
+    a real-but-wrong future date -- 2026 Ethiopian is 2033 Gregorian --
+    which is worse than showing nothing.
 
     Never raises: this is advisory-only, same principle as the extraction
     itself. A bad parse means no converted date is shown, not an error.
@@ -75,11 +81,9 @@ def parse_and_convert(raw_text):
     day, month, year = int(match.group(1)), int(match.group(2)), int(match.group(3))
     if year < 100:
         year += 2000  # short-year receipts are effectively always 20xx
+    if year >= 2020:
+        return None
     try:
-        converted = ethiopian_to_gregorian(year, month, day)
+        return ethiopian_to_gregorian(year, month, day).isoformat()
     except (ValueError, OverflowError):
         return None
-
-    if not _is_plausible(converted):
-        return None
-    return converted.isoformat()
