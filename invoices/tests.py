@@ -3,7 +3,9 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework.authtoken.models import Token
 
-from invoices.models import Role, StaffProfile, Winner, Invoice, InvoiceLot, AuditLog
+from invoices.models import (
+    Role, StaffProfile, Winner, Invoice, InvoiceLot, AuditLog, Payment,
+)
 
 
 def make_user(username, role_name, privileges):
@@ -169,6 +171,96 @@ class PrivilegeGateTests(APITestCase):
                 actionType='add_call_note',
             ).exists()
         )
+
+
+class VerifyEtCheckTests(APITestCase):
+    """
+    Exercises POST /api/receipts/<id>/verify-transaction/ itself.
+
+    The provider is never actually called: with VERIFY_ET_API_KEY unset,
+    check_transaction short-circuits before any network call, which is
+    exactly the inert path a fresh deploy sits in. What these assert is
+    that the endpoint authorizes correctly, validates input, and surfaces
+    the not-configured state cleanly instead of crashing.
+    """
+
+    def setUp(self):
+        from django.test import override_settings
+        self.override = override_settings(VERIFY_ET_API_KEY='', VERIFY_ET_SETTLEMENT_ACCOUNTS={})
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+
+        self.reviewer = make_user('vet_reviewer', 'CRM / Call Center Officer', [
+            'view_invoices', 'verify_payment', 'manager_verify_receipt',
+        ])
+        self.outsider = make_user('vet_outsider', 'Viewer', ['view_invoices'])
+        self.invoice = make_invoice()
+        self.payment = Payment.objects.create(
+            invoice=self.invoice,
+            amountPaid=1000,
+            paymentMethod='bank_transfer',
+            paymentDate='2026-01-15',
+        )
+
+    def auth(self, user):
+        token, _ = Token.objects.get_or_create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def url(self, payment=None):
+        return f"/api/receipts/{(payment or self.payment).id}/verify-transaction/"
+
+    def test_not_configured_returns_502_not_crash(self):
+        self.auth(self.reviewer)
+        res = self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT1234567890'}, format='json')
+        self.assertEqual(res.status_code, 502)
+        self.assertEqual(res.data['error'], 'Verify.ET is not configured on this server.')
+
+    def test_missing_reference_returns_400(self):
+        self.auth(self.reviewer)
+        res = self.client.post(self.url(), {'bank': 'cbe'}, format='json')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('reference number', res.data['error'])
+
+    def test_blank_reference_returns_400(self):
+        self.auth(self.reviewer)
+        res = self.client.post(self.url(), {'referenceNumber': '   '}, format='json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_null_field_does_not_crash(self):
+        """Explicit JSON nulls must not raise AttributeError on .strip()."""
+        self.auth(self.reviewer)
+        res = self.client.post(self.url(), {
+            'bank': None, 'referenceNumber': 'FT1', 'accountSuffix': None, 'phoneNumber': None,
+        }, format='json')
+        self.assertEqual(res.status_code, 502)
+
+    def test_permission_denied_without_receipt_privileges(self):
+        self.auth(self.outsider)
+        res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
+        self.assertEqual(res.status_code, 403)
+
+    def test_unknown_payment_returns_404(self):
+        self.auth(self.reviewer)
+        res = self.client.post(
+            '/api/receipts/99999999/verify-transaction/',
+            {'referenceNumber': 'FT123'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_verify_payment_privilege_alone_is_enough(self):
+        """Finance has verify_payment but not manager_verify_receipt."""
+        finance = make_user('vet_finance', 'Finance Manager', ['view_invoices', 'verify_payment'])
+        self.auth(finance)
+        res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
+        self.assertEqual(res.status_code, 502)
+
+    def test_no_check_record_created_when_not_configured(self):
+        """A failed provider call must not leave a half-written check behind."""
+        from invoices.models import VerifyEtCheck
+        self.auth(self.reviewer)
+        self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT123'}, format='json')
+        self.assertFalse(VerifyEtCheck.objects.filter(payment=self.payment).exists())
 
 
 class StatusTransitionTests(TestCase):
