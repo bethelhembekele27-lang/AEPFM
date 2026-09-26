@@ -421,8 +421,9 @@ class ReceiptExtractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReceiptExtraction
         fields = [
-            'tin', 'receiptNumber', 'extractedDate', 'customerName',
-            'totalAmount', 'vatAmount', 'description', 'extractionConfidence', 'extractedAt',
+            'tin', 'receiptNumber', 'extractedDate', 'convertedGregorianDate',
+            'customerName', 'totalAmount', 'vatAmount', 'description',
+            'extractionConfidence', 'extractedAt',
         ]
 
 

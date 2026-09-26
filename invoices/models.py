@@ -427,6 +427,7 @@ class ReceiptExtraction(models.Model):
     tin = models.CharField(max_length=50, blank=True, default='')
     receiptNumber = models.CharField(max_length=100, blank=True, default='')
     extractedDate = models.CharField(max_length=100, blank=True, default='', help_text="As printed on the receipt — no calendar conversion is done, may be Ethiopian or Gregorian.")
+    convertedGregorianDate = models.CharField(max_length=20, blank=True, default='', help_text="Best-effort Ethiopian->Gregorian conversion of extractedDate, ISO format. Empty if extractedDate wasn't a parseable, plausible dd/mm/yy(yy) Ethiopian date.")
     customerName = models.CharField(max_length=255, blank=True, default='')
     totalAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     vatAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)

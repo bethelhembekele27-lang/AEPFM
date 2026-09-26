@@ -373,6 +373,9 @@ export default function ManagerReview({ role, privileges, token }) {
                       <div className="field"><div className="fl">TIN</div><div className="fv mono">{drawerRow.extraction.tin || "—"}</div></div>
                       <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{drawerRow.extraction.receiptNumber || "—"}</div></div>
                       <div className="field"><div className="fl">Date on receipt</div><div className="fv">{drawerRow.extraction.extractedDate || "—"}</div></div>
+                      {drawerRow.extraction.convertedGregorianDate && (
+                        <div className="field"><div className="fl">Converted (Gregorian)</div><div className="fv mono">{drawerRow.extraction.convertedGregorianDate}</div></div>
+                      )}
                       <div className="field"><div className="fl">Customer name</div><div className="fv">{drawerRow.extraction.customerName || "—"}</div></div>
                       <div className="field"><div className="fl">Total amount</div><div className="fv amount">{drawerRow.extraction.totalAmount ?? "—"}</div></div>
                       <div className="field"><div className="fl">VAT amount</div><div className="fv amount">{drawerRow.extraction.vatAmount ?? "—"}</div></div>

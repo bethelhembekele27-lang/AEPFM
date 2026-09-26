@@ -77,12 +77,16 @@ def run_and_save_extraction(payment, user):
     def to_decimal(v):
         return None if v in (None, '') else v
 
+    from .ethiopian_calendar import parse_and_convert
+    converted = parse_and_convert(data.get('extractedDate') or '') or ''
+
     extraction, _ = ReceiptExtraction.objects.update_or_create(
         payment=payment,
         defaults={
             'tin': data.get('tin') or '',
             'receiptNumber': data.get('receiptNumber') or '',
             'extractedDate': data.get('extractedDate') or '',
+            'convertedGregorianDate': converted,
             'customerName': data.get('customerName') or '',
             'totalAmount': to_decimal(data.get('totalAmount')),
             'vatAmount': to_decimal(data.get('vatAmount')),

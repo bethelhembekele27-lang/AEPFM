@@ -36,6 +36,9 @@ function ExtractionPopover({ extraction, amountPaid, onClose }) {
             <div className="field"><div className="fl">TIN</div><div className="fv mono">{extraction.tin || "—"}</div></div>
             <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{extraction.receiptNumber || "—"}</div></div>
             <div className="field"><div className="fl">Date on receipt</div><div className="fv">{extraction.extractedDate || "—"}</div></div>
+            {extraction.convertedGregorianDate && (
+              <div className="field"><div className="fl">Converted (Gregorian)</div><div className="fv mono">{extraction.convertedGregorianDate}</div></div>
+            )}
             <div className="field"><div className="fl">Customer name</div><div className="fv">{extraction.customerName || "—"}</div></div>
             <div className="field"><div className="fl">Total amount</div><div className="fv amount">{extraction.totalAmount ?? "—"}</div></div>
             <div className="field"><div className="fl">VAT amount</div><div className="fv amount">{extraction.vatAmount ?? "—"}</div></div>
