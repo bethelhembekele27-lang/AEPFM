@@ -180,7 +180,10 @@ VERIFY_ET_API_KEY = config("VERIFY_ET_API_KEY", default="")
 # {"cbe": "1000123456789", "telebirr": "0911234567"}. Leave empty until the
 # real numbers are known; settlementMatched then comes back null and the UI
 # shows no settlement warning.
-VERIFY_ET_SETTLEMENT_ACCOUNTS = {}
+VERIFY_ET_SETTLEMENT_ACCOUNTS = {
+    "cbe": "1000643970701",
+    "boa": "164720257",
+}
 # --- Cron (Phase 4) ---
 # Shared secret for the external daily pinger that hits POST /api/cron/flag-overdue/.
 # Empty means the endpoint always answers 403, so nothing runs unprompted.

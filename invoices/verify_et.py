@@ -76,7 +76,11 @@ def check_transaction(bank, reference, suffix='', phone_number='', settlement_ac
             'senderName': first.get('senderName', ''),
             'receiverName': first.get('receiverName', ''),
             'receiverAccount': first.get('receiverAccount', ''),
-            'settlementMatched': settlement.get('matched'),
+            # Only meaningful when WE asked for a settlement check. Verify.ET's
+            # own account-registry match (unrelated to our settlement_account
+            # arg) otherwise comes back matched:false and would falsely alarm
+            # on every check.
+            'settlementMatched': settlement.get('matched') if settlement_account else None,
             'rawResponse': payload,
             'errorMessage': '',
         }, None
