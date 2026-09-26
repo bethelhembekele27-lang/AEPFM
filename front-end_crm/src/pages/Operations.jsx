@@ -164,6 +164,7 @@ async function fetchInvoices() {
     totalAmountByInv = {}, feeAmountByInv = {}, bankAccountByInv = {},
     paragraph1ByInv = {}, paragraph2ByInv = {},
   }) {
+    const failures = [];
     try {
       for (const [invId, pct] of Object.entries(percentagesByInvId)) {
         const amhName = amhNames[invId] || '';
@@ -192,9 +193,8 @@ async function fetchInvoices() {
       // ...rest unchanged
 
         if (!response.ok) {
-          const error = await response.json();
-          setError(`Failed: ${error.detail}`);
-          return;
+          failures.push(invId);
+          continue;
         }
 
         const blob = await response.blob();
@@ -213,7 +213,11 @@ async function fetchInvoices() {
         document.body.removeChild(a);
       }
 
-      alert('PDFs generated successfully!');
+      if (failures.length > 0) {
+        setError(`${failures.length} PDF(s) failed to generate (invoice IDs: ${failures.join(', ')}). The rest downloaded successfully.`);
+      } else {
+        alert('PDFs generated successfully!');
+      }
       await fetchInvoices();
       setSelected([]);
       setShowGenerateModal(false);
@@ -229,19 +233,23 @@ const [showBulkUpdate, setShowBulkUpdate] = useState(false);
 async function deleteSelected() {
   if (selected.length === 0) return;
   if (!window.confirm(`Delete ${selected.length} invoice${selected.length > 1 ? "s" : ""} permanently? This cannot be undone.`)) return;
-  try {
-    for (const id of selected) {
-      await apiCall(`/api/invoices/${id}/`, {
+  const failures = [];
+  for (const id of selected) {
+    try {
+      const res = await apiCall(`/api/invoices/${id}/`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Token ${token}` } : {},
       });
+      if (!res.ok) failures.push(id);
+    } catch {
+      failures.push(id);
     }
-    await fetchInvoices();
-    setSelected([]);
-  } catch (err) {
-    setError('Failed to delete one or more invoices');
-    console.error(err);
   }
+  await fetchInvoices();
+  setSelected([]);
+  setError(failures.length > 0
+    ? `${failures.length} of ${selected.length} invoice(s) could not be deleted (IDs: ${failures.join(', ')}). The rest were removed.`
+    : "");
 }
 
 function openBulkUpdate() {
@@ -253,21 +261,25 @@ function openBulkUpdate() {
 }
 
 async function confirmBulkUpdate(newStatus) {
-  try {
-    for (const id of selected) {
-      await apiCall(`/api/invoices/${id}/change-status/`, {
+  const failures = [];
+  for (const id of selected) {
+    try {
+      const res = await apiCall(`/api/invoices/${id}/change-status/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (!res.ok) failures.push(id);
+    } catch {
+      failures.push(id);
     }
-    await fetchInvoices();
-    setSelected([]);
-    setShowBulkUpdate(false);
-  } catch (err) {
-    setError('Bulk update failed');
-    console.error(err);
   }
+  await fetchInvoices();
+  setSelected([]);
+  setShowBulkUpdate(false);
+  setError(failures.length > 0
+    ? `${failures.length} of ${selected.length} invoice(s) didn't update (likely a disallowed status transition for that invoice). IDs: ${failures.join(', ')}`
+    : "");
 }
 async function changeDueDate(invId, newDate) {
   try {

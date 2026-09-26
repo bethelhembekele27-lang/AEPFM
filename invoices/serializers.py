@@ -378,12 +378,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source='user.email', read_only=True)
     roleName = serializers.CharField(source='role.name', read_only=True)
     privilegeCount = serializers.SerializerMethodField()
+    lastPasswordChangedBy = serializers.SerializerMethodField()
+    lastUsernameChangedBy = serializers.SerializerMethodField()
 
     class Meta:
         model = StaffProfile
         fields = [
             'id', 'name', 'username', 'email', 'role', 'roleName', 'privileges',
             'privilegeCount', 'isActive', 'lastPasswordChange', 'lastUsernameChange',
+            'lastPasswordChangedBy', 'lastUsernameChangedBy',
         ]
 
     def get_name(self, obj):
@@ -394,6 +397,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def get_privilegeCount(self, obj):
         return f"{len(obj.privileges)}/{len(PRIVILEGE_CATALOG)}"
+
+    def get_lastPasswordChangedBy(self, obj):
+        return user_display_name(obj.lastPasswordChangedBy)
+
+    def get_lastUsernameChangedBy(self, obj):
+        return user_display_name(obj.lastUsernameChangedBy)
     
 class OfficeSettingsSerializer(serializers.ModelSerializer):
     configuredBy = serializers.SerializerMethodField()

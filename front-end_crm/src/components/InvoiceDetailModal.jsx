@@ -73,6 +73,12 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [error, setError] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
   const [extractionPopover, setExtractionPopover] = useState(null);
+  const [showExtraFields, setShowExtraFields] = useState(false);
+
+  const extraFieldKeys = invoice
+    ? [...new Set(invoice.lots.flatMap((l) => Object.keys(l.extraFields || {})))]
+    : [];
+  const anyExtraFields = extraFieldKeys.length > 0;
 
   const [attachments, setAttachments] = useState([]);
   const [docType, setDocType] = useState("other");
@@ -332,6 +338,40 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
               </tbody>
             </table>
           </div>
+
+          {anyExtraFields && (
+            <div style={{ marginBottom: 16 }}>
+              <button className="btn btn-sm btn-ghost" onClick={() => setShowExtraFields((s) => !s)}>
+                {showExtraFields ? "Hide" : "Show"} additional spreadsheet columns
+              </button>
+              {showExtraFields && (
+                <div className="tbl-wrap" style={{ marginTop: 8 }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Lot #</th>
+                          {extraFieldKeys.map((k) => (
+                            <th key={k}>{k}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoice.lots.map((l) => (
+                          <tr key={l.id}>
+                            <td className="mono">{l.lotNumber}</td>
+                            {extraFieldKeys.map((k) => (
+                              <td key={k}>{(l.extraFields || {})[k] ?? <span style={{ color: "var(--text-3)" }}>—</span>}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {invoice.payments && invoice.payments.length > 0 && (
             <>

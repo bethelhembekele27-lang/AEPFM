@@ -5,6 +5,7 @@ from rest_framework import status as http_status
 
 from .models import Invoice
 from .permissions import has_permission
+from .audit import log_audit
 
 UNPAID_STATUSES = ['invoice_generated', 'pending_payment', 'payment_submitted', 'under_verification', 'overdue']
 
@@ -86,8 +87,15 @@ class CallCenterNoteView(APIView):
         except Invoice.DoesNotExist:
             return Response({'error': 'Invoice not found'}, status=http_status.HTTP_404_NOT_FOUND)
 
+        previous_note = invoice.callNotes
         note = request.data.get('callNotes', '')
         invoice.callNotes = note
         invoice.save(update_fields=['callNotes', 'updatedAt'])
+
+        log_audit(
+            invoice, 'Call center note updated', request.user,
+            previous_value=previous_note[:100], new_value=note[:100],
+            action_type='add_call_note',
+        )
 
         return Response({'id': invoice.id, 'callNotes': invoice.callNotes})
