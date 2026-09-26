@@ -185,11 +185,9 @@ def _read_rows_any_format(file_obj, filename):
     restricts the file picker, so the extension is a reliable signal and we
     avoid reading every upload twice.
 
-    Note on .xls dates: xlrd returns raw Excel serial numbers (e.g. 45678.0)
-    for date cells rather than datetime objects, unlike openpyxl. That flows
-    into parse_submitted_at's string path and yields None rather than a wrong
-    date. If real .xls files show missing dates, add xlrd.xldate_as_tuple
-    conversion here.
+    .xls date cells are converted to real datetimes here (xlrd otherwise
+    returns raw Excel serial numbers), so both .xls and .xlsx produce the
+    same shape for parse_submitted_at downstream.
     """
     name = (filename or '').lower()
 
@@ -202,7 +200,19 @@ def _read_rows_any_format(file_obj, filename):
     if name.endswith('.xls'):
         book = xlrd.open_workbook(file_contents=file_obj.read())
         sheet = book.sheet_by_index(0)
-        return [sheet.row_values(r) for r in range(sheet.nrows)]
+        rows = []
+        for r in range(sheet.nrows):
+            row = []
+            for c in range(sheet.ncols):
+                value = sheet.cell_value(r, c)
+                if sheet.cell_type(r, c) == xlrd.XL_CELL_DATE:
+                    # xlrd hands back a raw Excel serial number (e.g. 45678.0)
+                    # for date cells. Convert to a real datetime so this path
+                    # matches what openpyxl returns natively for .xlsx.
+                    value = datetime(*xlrd.xldate_as_tuple(value, book.datemode))
+                row.append(value)
+            rows.append(row)
+        return rows
 
     # default: .xlsx
     wb = openpyxl.load_workbook(file_obj, data_only=True)
