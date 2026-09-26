@@ -239,7 +239,7 @@ export default function ImportBatches({ role, token, privileges }) {
             {selectedBatches.length} selected
           </span>
         )}
-        {role === "administrator" && (
+        {(privileges || []).includes("delete_records") && (
           <button
             className="btn btn-danger btn-delete"
             onClick={deleteSelectedBatches}
@@ -260,7 +260,7 @@ export default function ImportBatches({ role, token, privileges }) {
             <thead>
               <tr>
                 <th style={{ width: 32 }}>
-                  {role === "administrator" && <input type="checkbox" checked={batches.length > 0 && selectedBatches.length === batches.length} onChange={toggleAllBatches} />}
+                  {(privileges || []).includes("delete_records") && <input type="checkbox" checked={batches.length > 0 && selectedBatches.length === batches.length} onChange={toggleAllBatches} />}
                 </th>
                 <th>Batch</th><th>Company</th><th>Auction date</th><th>Uploaded</th><th>Records</th><th>Status</th><th>Imported by</th>
               </tr>
@@ -269,7 +269,7 @@ export default function ImportBatches({ role, token, privileges }) {
               {batches.map((b) => (
                 <tr key={b.id}>
                   <td>
-                    {role === "administrator" && <input type="checkbox" checked={selectedBatches.includes(b.id)} onChange={() => toggleBatchRow(b.id)} />}
+                    {(privileges || []).includes("delete_records") && <input type="checkbox" checked={selectedBatches.includes(b.id)} onChange={() => toggleBatchRow(b.id)} />}
                   </td>
                   <td onClick={() => openBatchDetail(b)} style={{ cursor: "pointer" }}>
                     {b.batchName || <span style={{ color: "var(--text-3)" }}>—</span>}

@@ -88,7 +88,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [editError, setEditError] = useState("");
 
   const canUpload = (privileges || []).includes("upload_payment_proof");
-  const canDelete = role === "administrator"; // delete_records — no catalog key yet
+  const canDelete = (privileges || []).includes("delete_records");
   const canEdit = (privileges || []).includes("edit_invoice");
 
   useEffect(() => {

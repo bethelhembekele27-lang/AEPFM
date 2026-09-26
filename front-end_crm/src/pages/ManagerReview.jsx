@@ -53,7 +53,7 @@ export default function ManagerReview({ role, privileges, token }) {
   const canManage = (privileges || []).includes("manager_verify_receipt");
   const restrictedView = !canManage && (privileges || []).includes("verify_payment");
   const canAccess = canManage || restrictedView;
-  const canDelete = role === "administrator";
+  const canDelete = (privileges || []).includes("delete_records");
 
   const [tab, setTab] = useState(restrictedView ? "manager_approved" : "pending_manager_review");
   const [rows, setRows] = useState([]);

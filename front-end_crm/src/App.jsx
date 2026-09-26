@@ -116,7 +116,7 @@ export default function App() {
           {page === "operations" && smsInvoiceId && (
             <SendSms invoiceId={smsInvoiceId} onBack={() => setSmsInvoiceId(null)} />
           )}
-          {page === "dashboard" && <Dashboard role={session.role} token={session.token} />}
+          {page === "dashboard" && <Dashboard role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "queues" && <Queues role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "reports" && <Reports role={session.role} privileges={session.privileges} token={session.token} />}
           {page === "callcenter" && <CallCenter role={session.role} privileges={session.privileges} token={session.token} />}

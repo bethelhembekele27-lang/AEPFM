@@ -35,7 +35,7 @@ export default function AuditTrail({ role, token, privileges }) {
   const [count, setCount] = useState(0);
 
   const canView = (privileges || []).includes("view_audit");
-  const canClear = role === "administrator"; // delete_records — no catalog key yet
+  const canClear = (privileges || []).includes("delete_records");
 
   useEffect(() => { if (canView) fetchFilterOptions(); }, []);
   useEffect(() => { setPage(1); }, [filters]);

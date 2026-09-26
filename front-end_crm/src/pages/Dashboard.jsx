@@ -27,13 +27,13 @@ function RevenueBarList({ title, items, nameKey }) {
   );
 }
 
-export default function Dashboard({ role, token }) {
+export default function Dashboard({ role, token, privileges }) {
   const [receivedPeriod, setReceivedPeriod] = useState("today");
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const canView = ["administrator", "auction_manager", "finance_manager", "viewer"].includes(role);
+  const canView = (privileges || []).includes("view_dashboard");
 
   useEffect(() => {
     if (canView) fetchDashboardData();

@@ -374,7 +374,7 @@ function exportRecords() {
           </button>
         )}
 
-        {role === "administrator" && ( 
+        {(privileges || []).includes("change_status_generic") && ( 
           <button
             className="btn btn-amber"
             onClick={openBulkUpdate}
