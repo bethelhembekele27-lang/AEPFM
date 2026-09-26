@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { apiCall } from "../api";
 
-export default function CallCenter({ role, token }) {
+export default function CallCenter({ role, token, privileges }) {
   const [rows, setRows] = useState([]);
   const [statusFilters, setStatusFilters] = useState([{ value: "", label: "All unpaid statuses" }]);
   const [statusFilter, setStatusFilter] = useState("");
@@ -12,7 +12,7 @@ export default function CallCenter({ role, token }) {
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canManage = role === "administrator" || role === "call_operator";
+  const canManage = (privileges || []).includes("manage_call_center");
 
   useEffect(() => { fetchRows(); }, [statusFilter]);
 

@@ -459,7 +459,7 @@ function EmployeePreviewModal({ employee, catalog, token, onClose, onSaved, onEd
   );
 }
 
-export default function Employees({ role, token }) {
+export default function Employees({ role, token, privileges }) {
   const [employees, setEmployees] = useState([]);
   const [roles, setRoles] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -472,7 +472,7 @@ export default function Employees({ role, token }) {
   const [resetPwEmployee, setResetPwEmployee] = useState(null);
   const [selected, setSelected] = useState([]);
 
-  const canManage = role === "administrator";
+  const canManage = (privileges || []).includes("manage_users");
 
   useEffect(() => { fetchAll(); }, []);
 

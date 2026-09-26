@@ -3,8 +3,8 @@ import { money } from "../data";
 import { apiCall } from "../api";
 import SendSmsBulkModal from "../components/SendSmsBulkModal";
 
-export default function ImportBatches({ role, token }) {
-  const canImport = role === "administrator" || role === "auction_manager";
+export default function ImportBatches({ role, token, privileges }) {
+  const canImport = (privileges || []).includes("import_batches");
   const [company, setCompany] = useState("");
   const [date, setDate] = useState("");
   const [batchName, setBatchName] = useState("");

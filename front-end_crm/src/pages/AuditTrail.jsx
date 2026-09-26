@@ -11,7 +11,7 @@ const ACTION_TYPE_LABELS = {
   'other': 'Other',
 };
 
-export default function AuditTrail({ role, token }) {
+export default function AuditTrail({ role, token, privileges }) {
   const [logs, setLogs] = useState([]);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -34,8 +34,8 @@ export default function AuditTrail({ role, token }) {
   const [totalPages, setTotalPages] = useState(1);
   const [count, setCount] = useState(0);
 
-  const canView = role === "administrator" || role === "finance_manager";
-  const canClear = role === "administrator";
+  const canView = (privileges || []).includes("view_audit");
+  const canClear = role === "administrator"; // delete_records — no catalog key yet
 
   useEffect(() => { if (canView) fetchFilterOptions(); }, []);
   useEffect(() => { setPage(1); }, [filters]);
