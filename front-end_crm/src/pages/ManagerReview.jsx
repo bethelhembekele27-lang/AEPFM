@@ -406,6 +406,11 @@ export default function ManagerReview({ role, privileges, token }) {
                     <select value={vetBank} onChange={(e) => setVetBank(e.target.value)}>
                       {VERIFY_ET_BANKS.map((b) => <option key={b.v} value={b.v}>{b.l}</option>)}
                     </select>
+                    {!vetBank && (
+                      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>
+                        Auto-detect may still fail if the bank requires extra fields (e.g. CBE needs an account suffix) — pick the bank explicitly if this happens.
+                      </div>
+                    )}
                   </div>
                   <div className="field">
                     <div className="fl">Reference number</div>
