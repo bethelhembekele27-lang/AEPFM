@@ -16,6 +16,7 @@ Extract the following fields as JSON only, no other text:
 {
   "tin": "the TIN number of the issuing company/bank, if visible",
   "receiptNumber": "the receipt or invoice number",
+  "bankReferenceNumber": "the bank transfer or transaction reference number, if any — different from the receipt/invoice number, look for something labeled reference, transaction ID, or FT number; null if not present or this isn't a bank-transfer receipt",
   "extractedDate": "the date exactly as printed, including which calendar if stated",
   "customerName": "the name of the person/company the receipt was issued to",
   "totalAmount": "the final total amount as a plain number, no currency symbol or commas",
@@ -85,6 +86,7 @@ def run_and_save_extraction(payment, user):
         defaults={
             'tin': data.get('tin') or '',
             'receiptNumber': data.get('receiptNumber') or '',
+            'bankReferenceNumber': data.get('bankReferenceNumber') or '',
             'extractedDate': data.get('extractedDate') or '',
             'convertedGregorianDate': converted,
             'customerName': data.get('customerName') or '',

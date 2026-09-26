@@ -198,3 +198,69 @@ class ReceiptExtractView(APIView):
 
         from .serializers import ReceiptExtractionSerializer
         return Response(ReceiptExtractionSerializer(extraction).data, status=http_status.HTTP_201_CREATED)
+
+
+class VerifyEtCheckView(APIView):
+    """
+    POST /api/receipts/<payment_id>/verify-transaction/
+    Body: {bank?, referenceNumber, accountSuffix?, phoneNumber?}
+
+    Deliberately does NOT require manager_approved, unlike extraction —
+    a Verify.ET result is evidence you want *during* the review decision,
+    not only record-keeping after it. A check is never allowed to approve
+    or reject anything by itself; it only reports what the provider said.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, payment_id):
+        if not (has_permission(request.user, 'manager_verify_receipt')
+                or has_permission(request.user, 'verify_payment')):
+            return Response({'error': 'Permission denied'}, status=http_status.HTTP_403_FORBIDDEN)
+
+        try:
+            payment = Payment.objects.select_related('invoice').get(pk=payment_id)
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment not found'}, status=http_status.HTTP_404_NOT_FOUND)
+
+        reference = (request.data.get('referenceNumber') or '').strip()
+        bank = (request.data.get('bank') or '').strip()
+        suffix = (request.data.get('accountSuffix') or '').strip()
+        phone = (request.data.get('phoneNumber') or '').strip()
+        if not reference:
+            return Response(
+                {'error': 'A reference number is required.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        settlement_account = settings.VERIFY_ET_SETTLEMENT_ACCOUNTS.get(bank) if bank else None
+
+        from .verify_et import check_transaction
+        result, error = check_transaction(bank, reference, suffix, phone, settlement_account)
+        if error:
+            return Response({'error': error}, status=http_status.HTTP_502_BAD_GATEWAY)
+
+        from .models import VerifyEtCheck
+        check, _ = VerifyEtCheck.objects.update_or_create(
+            payment=payment,
+            defaults={
+                'bank': result['bank'],
+                'referenceNumber': reference,
+                'accountSuffix': suffix,
+                'phoneNumber': phone,
+                'requestId': result['requestId'],
+                'processingStatus': result['processingStatus'],
+                'verified': result['verified'],
+                'amount': result['amount'],
+                'currency': result['currency'],
+                'senderName': result['senderName'],
+                'receiverName': result['receiverName'],
+                'receiverAccount': result['receiverAccount'],
+                'settlementMatched': result['settlementMatched'],
+                'rawResponse': result['rawResponse'],
+                'errorMessage': result['errorMessage'],
+                'checkedBy': request.user,
+            },
+        )
+
+        from .serializers import VerifyEtCheckSerializer
+        return Response(VerifyEtCheckSerializer(check).data, status=http_status.HTTP_201_CREATED)

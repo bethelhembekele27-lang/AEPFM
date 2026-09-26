@@ -427,6 +427,7 @@ class ReceiptExtraction(models.Model):
     tin = models.CharField(max_length=50, blank=True, default='')
     receiptNumber = models.CharField(max_length=100, blank=True, default='')
     extractedDate = models.CharField(max_length=100, blank=True, default='', help_text="As printed on the receipt — no calendar conversion is done, may be Ethiopian or Gregorian.")
+    bankReferenceNumber = models.CharField(max_length=100, blank=True, default='', help_text="Bank transfer / transaction reference printed on the receipt, distinct from the receipt or invoice number. Used to pre-fill Verify.ET checks.")
     convertedGregorianDate = models.CharField(max_length=20, blank=True, default='', help_text="Best-effort Ethiopian->Gregorian conversion of extractedDate, ISO format. Empty if extractedDate wasn't a parseable, plausible dd/mm/yy(yy) Ethiopian date.")
     customerName = models.CharField(max_length=255, blank=True, default='')
     totalAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -439,3 +440,35 @@ class ReceiptExtraction(models.Model):
 
     def __str__(self):
         return f"Extraction for payment #{self.payment_id}"
+
+
+class VerifyEtCheck(models.Model):
+    """
+    Result of a Verify.ET bank/wallet transaction lookup against a Payment.
+    Kept separate from both the Payment and its ReceiptExtraction because it
+    is a third-party assertion that can be re-run and can disagree with what
+    the receipt image says — the reviewer needs to see both, not have one
+    overwrite the other. OneToOne because we keep the latest check per
+    payment; rawResponse preserves the full provider payload for disputes.
+    """
+    payment = models.OneToOneField(Payment, on_delete=models.CASCADE, related_name='verifyEtCheck')
+    bank = models.CharField(max_length=30, blank=True, default='')
+    referenceNumber = models.CharField(max_length=100)
+    accountSuffix = models.CharField(max_length=20, blank=True, default='')
+    phoneNumber = models.CharField(max_length=20, blank=True, default='')
+    requestId = models.CharField(max_length=100, blank=True, default='')
+    processingStatus = models.CharField(max_length=20, blank=True, default='')
+    verified = models.BooleanField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=10, blank=True, default='')
+    senderName = models.CharField(max_length=255, blank=True, default='')
+    receiverName = models.CharField(max_length=255, blank=True, default='')
+    receiverAccount = models.CharField(max_length=100, blank=True, default='')
+    settlementMatched = models.BooleanField(null=True, blank=True)
+    rawResponse = models.JSONField(default=dict, blank=True)
+    errorMessage = models.TextField(blank=True, default='')
+    checkedAt = models.DateTimeField(auto_now_add=True)
+    checkedBy = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Verify.ET check for payment #{self.payment_id}: {self.referenceNumber}"

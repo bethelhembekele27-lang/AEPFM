@@ -172,6 +172,15 @@ TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 # --- Gemini receipt extraction (Phase 9) ---
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+# --- Verify.ET transaction verification ---
+# Inert until VERIFY_ET_API_KEY is set; check_transaction() returns a
+# "not configured" error rather than calling out.
+VERIFY_ET_API_KEY = config("VERIFY_ET_API_KEY", default="")
+# Map bank code -> Auction Ethiopia's own settlement account, e.g.
+# {"cbe": "1000123456789", "telebirr": "0911234567"}. Leave empty until the
+# real numbers are known; settlementMatched then comes back null and the UI
+# shows no settlement warning.
+VERIFY_ET_SETTLEMENT_ACCOUNTS = {}
 # --- Cron (Phase 4) ---
 # Shared secret for the external daily pinger that hits POST /api/cron/flag-overdue/.
 # Empty means the endpoint always answers 403, so nothing runs unprompted.

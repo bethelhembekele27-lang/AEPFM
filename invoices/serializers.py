@@ -9,6 +9,7 @@ from google.auth.exceptions import GoogleAuthError
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
     Invoice, InvoiceLot, Payment, Attachment, AuditLog, OfficeSettings, ReceiptExtraction,
+    VerifyEtCheck,
 )
 from .permissions import has_permission
 
@@ -421,9 +422,25 @@ class ReceiptExtractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReceiptExtraction
         fields = [
-            'tin', 'receiptNumber', 'extractedDate', 'convertedGregorianDate',
+            'tin', 'receiptNumber', 'bankReferenceNumber', 'extractedDate', 'convertedGregorianDate',
             'customerName', 'totalAmount', 'vatAmount', 'description',
             'extractionConfidence', 'extractedAt',
+        ]
+
+
+class VerifyEtCheckSerializer(serializers.ModelSerializer):
+    """
+    Read-only projection of the latest Verify.ET lookup for a payment.
+    rawResponse is deliberately excluded — it holds the provider's full
+    payload and the UI has no use for it; it stays on the model for audits.
+    """
+    class Meta:
+        model = VerifyEtCheck
+        fields = [
+            'bank', 'referenceNumber', 'accountSuffix', 'phoneNumber',
+            'processingStatus', 'verified', 'amount', 'currency',
+            'senderName', 'receiverName', 'settlementMatched',
+            'errorMessage', 'checkedAt',
         ]
 
 
@@ -452,14 +469,22 @@ class ManagerPaymentSerializer(PaymentSerializer):
             'managerVerifiedDate',
             'submittedViaPublicLink',
             'extraction',
+            'verifyEtCheck',
         ]
 
     extraction = serializers.SerializerMethodField()
+    verifyEtCheck = serializers.SerializerMethodField()
 
     def get_extraction(self, obj):
         try:
             return ReceiptExtractionSerializer(obj.extraction).data
         except ReceiptExtraction.DoesNotExist:
+            return None
+
+    def get_verifyEtCheck(self, obj):
+        try:
+            return VerifyEtCheckSerializer(obj.verifyEtCheck).data
+        except VerifyEtCheck.DoesNotExist:
             return None
 
     def get_receiptUrl(self, obj):

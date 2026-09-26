@@ -32,6 +32,15 @@ const RefreshIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill=
 const SparkleIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>);
 const WarnIcon = () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>);
 
+const VERIFY_ET_BANKS = [
+  { v: "", l: "Let Verify.ET detect it" },
+  { v: "cbe", l: "CBE" }, { v: "telebirr", l: "Telebirr" }, { v: "boa", l: "Bank of Abyssinia" },
+  { v: "dashen", l: "Dashen Bank" }, { v: "awash", l: "Awash Bank" }, { v: "cbebirr", l: "CBE Birr" },
+  { v: "mpesa", l: "MPESA" }, { v: "siinqee", l: "Siinqee Bank" }, { v: "kaafiebirr", l: "Kaafi Ebirr" },
+];
+const SUFFIX_BANKS = ["cbe", "boa"];
+const PHONE_BANKS = ["cbebirr"];
+
 function ConfidenceBadge({ level }) {
   const map = { high: "paid", medium: "pending_payment", low: "cancelled" };
   const label = level ? level.charAt(0).toUpperCase() + level.slice(1) : "Unknown";
@@ -67,6 +76,43 @@ export default function ManagerReview({ role, privileges, token }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [vetBank, setVetBank] = useState("");
+  const [vetRef, setVetRef] = useState("");
+  const [vetSuffix, setVetSuffix] = useState("");
+  const [vetPhone, setVetPhone] = useState("");
+  const [vetChecking, setVetChecking] = useState(false);
+  const [vetError, setVetError] = useState("");
+
+  function openDrawerRow(row) {
+    setDrawerRow(row);
+    setVetRef(row?.extraction?.bankReferenceNumber || "");
+    setVetBank("");
+    setVetSuffix("");
+    setVetPhone("");
+    setVetError("");
+  }
+
+  async function checkVerifyEt() {
+    if (!drawerRow) return;
+    setVetChecking(true);
+    setVetError("");
+    try {
+      const res = await apiCall(`/api/receipts/${drawerRow.id}/verify-transaction/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: JSON.stringify({ bank: vetBank, referenceNumber: vetRef, accountSuffix: vetSuffix, phoneNumber: vetPhone }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setVetError(data.error || "Check failed"); return; }
+      setDrawerRow((r) => ({ ...r, verifyEtCheck: data }));
+      setRows((prev) => prev.map((r) => (r.id === drawerRow.id ? { ...r, verifyEtCheck: data } : r)));
+    } catch (err) {
+      setVetError("Network error");
+      console.error(err);
+    } finally {
+      setVetChecking(false);
+    }
+  }
 
   useEffect(() => { if (canAccess) { fetchRows(tab); fetchCounts(); } else setLoading(false); }, [tab]);
 
@@ -260,7 +306,7 @@ export default function ManagerReview({ role, privileges, token }) {
                 return (
                   <tr
                     key={p.id}
-                    onClick={() => setDrawerRow(p)}
+                    onClick={() => openDrawerRow(p)}
                     style={{ cursor: "pointer", background: selected.includes(p.id) ? "var(--brass-bg)" : undefined }}
                   >
                     <td onClick={(e) => e.stopPropagation()}>
@@ -349,6 +395,70 @@ export default function ManagerReview({ role, privileges, token }) {
                   </a>
                 )
               ) : <div className="locked-note" style={{ marginTop: 0 }}>No receipt file.</div>}
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+              <div className="fl" style={{ marginBottom: 8 }}>Verify with Verify.ET</div>
+              <div className="card" style={{ background: "var(--paper)", padding: 16 }}>
+                <div className="field-grid" style={{ marginBottom: 10, gap: "10px 20px" }}>
+                  <div className="field">
+                    <div className="fl">Bank</div>
+                    <select value={vetBank} onChange={(e) => setVetBank(e.target.value)}>
+                      {VERIFY_ET_BANKS.map((b) => <option key={b.v} value={b.v}>{b.l}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <div className="fl">Reference number</div>
+                    <input value={vetRef} onChange={(e) => setVetRef(e.target.value)} placeholder="e.g. FT1234567890" />
+                  </div>
+                  {SUFFIX_BANKS.includes(vetBank) && (
+                    <div className="field"><div className="fl">Account suffix</div><input value={vetSuffix} onChange={(e) => setVetSuffix(e.target.value)} /></div>
+                  )}
+                  {PHONE_BANKS.includes(vetBank) && (
+                    <div className="field"><div className="fl">Phone</div><input value={vetPhone} onChange={(e) => setVetPhone(e.target.value)} placeholder="251911234567" /></div>
+                  )}
+                </div>
+
+                <button className="btn btn-sm btn-brass" onClick={checkVerifyEt} disabled={vetChecking || !vetRef.trim()}>
+                  {vetChecking ? "Checking..." : "Check with Verify.ET"}
+                </button>
+
+                {vetError && (
+                  vetError === "Verify.ET is not configured on this server." ? (
+                    <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--text-3)", fontStyle: "italic" }}>Verify.ET isn't set up yet.</div>
+                  ) : (
+                    <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--red)" }}>{vetError}</div>
+                  )
+                )}
+
+                {drawerRow.verifyEtCheck && drawerRow.verifyEtCheck.processingStatus === "completed" && (
+                  <div style={{ marginTop: 14 }}>
+                    <span className={`stamp ${drawerRow.verifyEtCheck.verified ? "paid" : "cancelled"}`}>
+                      {drawerRow.verifyEtCheck.verified ? "Verified" : "Not verified"}
+                    </span>
+                    {drawerRow.verifyEtCheck.verified && (
+                      <div style={{ fontSize: 12.5, marginTop: 8, lineHeight: 1.6 }}>
+                        <div>Amount: {drawerRow.verifyEtCheck.amount} {drawerRow.verifyEtCheck.currency}</div>
+                        <div>Sender: {drawerRow.verifyEtCheck.senderName || "—"}</div>
+                        <div>Receiver: {drawerRow.verifyEtCheck.receiverName || "—"}</div>
+                      </div>
+                    )}
+                    {drawerRow.verifyEtCheck.amount && Number(drawerRow.verifyEtCheck.amount) !== Number(drawerRow.amountPaid) && (
+                      <div style={{ background: "var(--amber-bg)", color: "var(--amber)", borderRadius: 8, padding: "10px 12px", marginTop: 10, fontSize: 12.5 }}>
+                        Verify.ET's amount ({drawerRow.verifyEtCheck.amount}) doesn't match the recorded payment ({drawerRow.amountPaid}). Informational only.
+                      </div>
+                    )}
+                    {drawerRow.verifyEtCheck.settlementMatched === false && (
+                      <div style={{ background: "var(--red-bg)", color: "var(--red)", borderRadius: 8, padding: "10px 12px", marginTop: 10, fontSize: 12.5, fontWeight: 600 }}>
+                        This transaction did NOT go to Auction Ethiopia's own account. Review carefully before approving.
+                      </div>
+                    )}
+                  </div>
+                )}
+                {drawerRow.verifyEtCheck && drawerRow.verifyEtCheck.processingStatus !== "completed" && (
+                  <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--text-3)" }}>Still processing — check again shortly.</div>
+                )}
+              </div>
             </div>
 
             {tab === "manager_approved" && (
