@@ -472,3 +472,14 @@ class VerifyEtCheck(models.Model):
 
     def __str__(self):
         return f"Verify.ET check for payment #{self.payment_id}: {self.referenceNumber}"
+
+
+class TokenActivity(models.Model):
+    """
+    One row per DRF auth Token, tracking last use for sliding idle-expiry.
+    Kept separate from rest_framework.authtoken's Token model (not ours to
+    modify) rather than monkeypatching it. A TokenActivity row with no
+    matching Token is harmless dead weight — auth re-creates it on demand.
+    """
+    token_key = models.CharField(max_length=40, unique=True)
+    lastUsed = models.DateTimeField(auto_now=True)
