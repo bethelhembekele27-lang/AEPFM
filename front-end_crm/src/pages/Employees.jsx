@@ -633,6 +633,7 @@ export default function Employees({ role, token, privileges }) {
                 </th>
                 <th>Name</th>
                 <th>Username</th>
+                <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
                 <th>Last password change</th>
@@ -647,6 +648,7 @@ export default function Employees({ role, token, privileges }) {
                   <td><input type="checkbox" checked={selected.includes(emp.id)} onChange={() => toggleRow(emp.id)} /></td>
                   <td style={{ cursor: "pointer", color: "var(--brass-dark)" }} onClick={() => setPreviewEmployee(emp)}>{emp.name}</td>
                   <td className="mono">{emp.username}</td>
+                  <td>{emp.email || <span style={{ color: "var(--text-3)" }}>—</span>}</td>
                   <td>{emp.roleName}</td>
                   <td><span className={`stamp ${emp.isActive ? "paid" : "cancelled"}`}>{emp.isActive ? "Active" : "Inactive"}</span></td>
                   <td>{emp.lastPasswordChangedBy || <span style={{ color: "var(--text-3)" }}>—</span>}</td>
