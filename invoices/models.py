@@ -2,6 +2,7 @@ import uuid
 import uuid as uuid_lib
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from django.db.models import Sum
 from decimal import Decimal
 
@@ -482,4 +483,4 @@ class TokenActivity(models.Model):
     matching Token is harmless dead weight — auth re-creates it on demand.
     """
     token_key = models.CharField(max_length=40, unique=True)
-    lastUsed = models.DateTimeField(auto_now=True)
+    lastUsed = models.DateTimeField(default=timezone.now)

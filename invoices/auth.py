@@ -30,8 +30,8 @@ class ExpiringTokenAuthentication(TokenAuthentication):
             activity.delete()
             raise AuthenticationFailed('Session expired. Please log in again.')
 
-        # auto_now=True makes DateTimeField.pre_save stamp the current time,
-        # and pre_save runs for exactly the fields named in update_fields, so
-        # this is a real touch rather than a no-op write of the old value.
+        # Set the timestamp explicitly rather than relying on auto_now, so the
+        # bump is visible at the call site and testable without save-time magic.
+        activity.lastUsed = timezone.now()
         activity.save(update_fields=['lastUsed'])
         return user, token
