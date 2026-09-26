@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APITestCase
 from rest_framework.authtoken.models import Token
 
@@ -177,12 +178,14 @@ class VerifyEtCheckTests(APITestCase):
     """
     Exercises POST /api/receipts/<id>/verify-transaction/ itself.
 
-    The provider is never actually called: with VERIFY_ET_API_KEY unset,
-    check_transaction short-circuits before any network call, which is
-    exactly the inert path a fresh deploy sits in. What these assert is
-    that the endpoint authorizes correctly, validates input, and surfaces
-    the not-configured state cleanly instead of crashing.
+    check_transaction is mocked in every test, so the suite never touches
+    verify.et regardless of what VERIFY_ET_API_KEY happens to be set to
+    locally or in CI. Mocking at the check_transaction boundary (rather
+    than at requests.post) keeps these tests independent of the HTTP call
+    shape inside verify_et.py.
     """
+
+    NOT_CONFIGURED = 'Verify.ET is not configured on this server.'
 
     def setUp(self):
         from django.test import override_settings
@@ -202,6 +205,10 @@ class VerifyEtCheckTests(APITestCase):
             paymentDate='2026-01-15',
         )
 
+    def mock_provider(self, result=None, error=None):
+        """Patch check_transaction to return (result, error) — no network."""
+        return patch('invoices.verify_et.check_transaction', return_value=(result, error))
+
     def auth(self, user):
         token, _ = Token.objects.get_or_create(user=user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
@@ -211,56 +218,109 @@ class VerifyEtCheckTests(APITestCase):
 
     def test_not_configured_returns_502_not_crash(self):
         self.auth(self.reviewer)
-        res = self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT1234567890'}, format='json')
+        with self.mock_provider(error=self.NOT_CONFIGURED):
+            res = self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT1234567890'}, format='json')
         self.assertEqual(res.status_code, 502)
-        self.assertEqual(res.data['error'], 'Verify.ET is not configured on this server.')
+        self.assertEqual(res.data['error'], self.NOT_CONFIGURED)
 
     def test_missing_reference_returns_400(self):
         self.auth(self.reviewer)
-        res = self.client.post(self.url(), {'bank': 'cbe'}, format='json')
+        with self.mock_provider(error='unused'):
+            res = self.client.post(self.url(), {'bank': 'cbe'}, format='json')
         self.assertEqual(res.status_code, 400)
         self.assertIn('reference number', res.data['error'])
 
     def test_blank_reference_returns_400(self):
         self.auth(self.reviewer)
-        res = self.client.post(self.url(), {'referenceNumber': '   '}, format='json')
+        with self.mock_provider(error='unused'):
+            res = self.client.post(self.url(), {'referenceNumber': '   '}, format='json')
         self.assertEqual(res.status_code, 400)
 
     def test_null_field_does_not_crash(self):
         """Explicit JSON nulls must not raise AttributeError on .strip()."""
         self.auth(self.reviewer)
-        res = self.client.post(self.url(), {
-            'bank': None, 'referenceNumber': 'FT1', 'accountSuffix': None, 'phoneNumber': None,
-        }, format='json')
+        with self.mock_provider(error=self.NOT_CONFIGURED):
+            res = self.client.post(self.url(), {
+                'bank': None, 'referenceNumber': 'FT1', 'accountSuffix': None, 'phoneNumber': None,
+            }, format='json')
         self.assertEqual(res.status_code, 502)
 
     def test_permission_denied_without_receipt_privileges(self):
         self.auth(self.outsider)
-        res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
+        with self.mock_provider(error='unused'):
+            res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
         self.assertEqual(res.status_code, 403)
 
     def test_unknown_payment_returns_404(self):
         self.auth(self.reviewer)
-        res = self.client.post(
-            '/api/receipts/99999999/verify-transaction/',
-            {'referenceNumber': 'FT123'},
-            format='json',
-        )
+        with self.mock_provider(error='unused'):
+            res = self.client.post(
+                '/api/receipts/99999999/verify-transaction/',
+                {'referenceNumber': 'FT123'},
+                format='json',
+            )
         self.assertEqual(res.status_code, 404)
 
     def test_verify_payment_privilege_alone_is_enough(self):
         """Finance has verify_payment but not manager_verify_receipt."""
         finance = make_user('vet_finance', 'Finance Manager', ['view_invoices', 'verify_payment'])
         self.auth(finance)
-        res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
+        with self.mock_provider(error=self.NOT_CONFIGURED):
+            res = self.client.post(self.url(), {'referenceNumber': 'FT123'}, format='json')
         self.assertEqual(res.status_code, 502)
 
     def test_no_check_record_created_when_not_configured(self):
         """A failed provider call must not leave a half-written check behind."""
         from invoices.models import VerifyEtCheck
         self.auth(self.reviewer)
-        self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT123'}, format='json')
+        with self.mock_provider(error=self.NOT_CONFIGURED):
+            self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT123'}, format='json')
         self.assertFalse(VerifyEtCheck.objects.filter(payment=self.payment).exists())
+
+    def test_successful_check_is_persisted_and_returned(self):
+        """Provider said yes: the record is written and echoed back."""
+        from invoices.models import VerifyEtCheck
+        provider_result = {
+            'bank': 'cbe', 'requestId': 'req-1', 'processingStatus': 'completed',
+            'verified': True, 'amount': '1235.00', 'currency': 'ETB',
+            'senderName': 'Ashefi Birr', 'receiverName': 'Auction Ethiopia',
+            'receiverAccount': '1000123', 'settlementMatched': True,
+            'rawResponse': {'data': []}, 'errorMessage': '',
+        }
+        self.auth(self.reviewer)
+        with self.mock_provider(result=provider_result):
+            res = self.client.post(
+                self.url(),
+                {'bank': 'cbe', 'referenceNumber': 'FT123', 'accountSuffix': '43970701'},
+                format='json',
+            )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['verified'], True)
+        self.assertEqual(res.data['referenceNumber'], 'FT123')
+        self.assertEqual(res.data['accountSuffix'], '43970701')
+        self.assertNotIn('rawResponse', res.data)
+        check = VerifyEtCheck.objects.get(payment=self.payment)
+        self.assertEqual(check.checkedBy, self.reviewer)
+        self.assertEqual(str(check.amount), '1235.00')
+
+    def test_settlement_mismatch_is_null_without_settlement_account(self):
+        """
+        The red 'did not go to our account' warning fires on settlementMatched
+        == False. That must only be trusted when we actually sent our own
+        settlement account, so it has to stay None otherwise.
+        """
+        provider_result = {
+            'bank': 'cbe', 'requestId': 'req-2', 'processingStatus': 'completed',
+            'verified': True, 'amount': '1000.00', 'currency': 'ETB',
+            'senderName': 'A', 'receiverName': 'B', 'receiverAccount': 'x',
+            'settlementMatched': None,
+            'rawResponse': {}, 'errorMessage': '',
+        }
+        self.auth(self.reviewer)
+        with self.mock_provider(result=provider_result):
+            res = self.client.post(self.url(), {'bank': 'cbe', 'referenceNumber': 'FT9'}, format='json')
+        self.assertEqual(res.status_code, 201)
+        self.assertIsNone(res.data['settlementMatched'])
 
 
 class StatusTransitionTests(TestCase):
