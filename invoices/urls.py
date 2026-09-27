@@ -5,6 +5,7 @@ from .views import (
     AuctionViewSet, WinnerViewSet, InvoiceViewSet,
     AttachmentDeleteView, PaymentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
     OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
+    VerifyEtAutomationSettingsView,
 )
 from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView
 
@@ -29,6 +30,7 @@ urlpatterns = [
     path('audit-logs/', AuditLogListView.as_view(), name='audit-log-list'),
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),
     path('fee-config/', FeeConfigView.as_view(), name='fee-config'),
+    path('verify-et-automation/', VerifyEtAutomationSettingsView.as_view(), name='verify-et-automation'),
     path('office-settings/', OfficeSettingsView.as_view(), name='office-settings'),
     path('winners/manual/', ManualWinnerCreateView.as_view(), name='winner-manual-create'),
     path('audit-logs/filter-options/', AuditLogFilterOptionsView.as_view(), name='audit-log-filter-options'),

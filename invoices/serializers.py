@@ -9,7 +9,7 @@ from google.auth.exceptions import GoogleAuthError
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
     Invoice, InvoiceLot, Payment, Attachment, AuditLog, OfficeSettings, ReceiptExtraction,
-    VerifyEtCheck,
+    VerifyEtCheck, VerifyEtAutomationSettings,
 )
 from .permissions import has_permission
 
@@ -426,6 +426,17 @@ class ReceiptExtractionSerializer(serializers.ModelSerializer):
             'customerName', 'totalAmount', 'vatAmount', 'description',
             'extractionConfidence', 'extractedAt',
         ]
+
+
+class VerifyEtAutomationSettingsSerializer(serializers.ModelSerializer):
+    configuredBy = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VerifyEtAutomationSettings
+        fields = ['autoVerificationEnabled', 'configuredBy', 'configuredAt']
+
+    def get_configuredBy(self, obj):
+        return user_display_name(obj.configuredBy)
 
 
 class VerifyEtCheckSerializer(serializers.ModelSerializer):

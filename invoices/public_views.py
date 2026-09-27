@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+import logging
 
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
@@ -17,6 +18,8 @@ from .models import Invoice, Payment
 from .serializers import PublicInvoiceSerializer
 from .audit import log_audit
 from .pdf_rendering import load_invoice_images, render_invoice_html
+
+logger = logging.getLogger(__name__)
 
 IMAGE_NOT_CLEAR_MESSAGE = "ምስሉ ግልጽ አይደለም፣ እባክዎ ግልጽ ፎቶ አንስተው እንደገና ይስቀሉ"
 FILE_NOT_VALID_MESSAGE = "ፋይሉ ትክክለኛ አይደለም፣ እባክዎ ትክክለኛ PDF ወይም ግልጽ ፎቶ ይስቀሉ"
@@ -222,6 +225,17 @@ class PublicReceiptUploadView(APIView):
                 reason='Bidder self-submitted a payment receipt through the public invoice link.',
                 action_type='upload_payment',
             )
+
+        # Best-effort automatic Verify.ET check — never lets a failure here
+        # affect the bidder's response. Fully inert unless an admin has
+        # turned automation on. Note this is synchronous: when automation is
+        # enabled the upload response waits on a Verify.ET call (and possibly
+        # a Gemini extraction), so this endpoint gets correspondingly slower.
+        try:
+            from .verify_et_automation import maybe_auto_verify
+            maybe_auto_verify(payment)
+        except Exception:
+            logger.exception('Auto-verify failed (non-fatal)')
 
         return Response(
             {

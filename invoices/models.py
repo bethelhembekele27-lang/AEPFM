@@ -311,6 +311,10 @@ class Payment(models.Model):
     )
     managerVerifiedDate = models.DateTimeField(null=True, blank=True)
     managerNote = models.TextField(blank=True, default='')
+    autoReviewed = models.BooleanField(
+        default=False,
+        help_text="True if this payment's status was set automatically by Verify.ET automation, not a human manager.",
+    )
 
     def __str__(self):
         return f"{self.amountPaid} on {self.invoice.invoiceNumber}"
@@ -357,6 +361,7 @@ class AuditLog(models.Model):
         ('upload_payment', 'Payment uploaded'),
         ('add_call_note', 'Call center note updated'),
         ('send_sms', 'SMS sent'),
+        ('auto_verify_et', 'Auto-verified by Verify.ET'),
         ('other', 'Other'),
     ]
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='audit_logs')
@@ -429,6 +434,10 @@ class ReceiptExtraction(models.Model):
     receiptNumber = models.CharField(max_length=100, blank=True, default='')
     extractedDate = models.CharField(max_length=100, blank=True, default='', help_text="As printed on the receipt — no calendar conversion is done, may be Ethiopian or Gregorian.")
     bankReferenceNumber = models.CharField(max_length=100, blank=True, default='', help_text="Bank transfer / transaction reference printed on the receipt, distinct from the receipt or invoice number. Used to pre-fill Verify.ET checks.")
+    detectedBank = models.CharField(
+        max_length=30, blank=True, default='',
+        help_text="AI's best guess at the Verify.ET bank code (cbe, telebirr, boa, ...), or blank if unclear.",
+    )
     convertedGregorianDate = models.CharField(max_length=20, blank=True, default='', help_text="Best-effort Ethiopian->Gregorian conversion of extractedDate, ISO format. Empty if extractedDate wasn't a parseable, plausible dd/mm/yy(yy) Ethiopian date.")
     customerName = models.CharField(max_length=255, blank=True, default='')
     totalAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -473,6 +482,30 @@ class VerifyEtCheck(models.Model):
 
     def __str__(self):
         return f"Verify.ET check for payment #{self.payment_id}: {self.referenceNumber}"
+
+
+class VerifyEtAutomationSettings(models.Model):
+    """
+    Global on/off switch for automatic Verify.ET-based approval/rejection
+    of bidder-submitted receipts. Same single-active-row + history pattern
+    as FeeConfig/OfficeSettings. Admin-only to change (manage_fee_config,
+    reused — this is exactly as sensitive as the fee percentage).
+    Defaults OFF: automation only runs once an admin explicitly enables it.
+    """
+    autoVerificationEnabled = models.BooleanField(default=False)
+    configuredBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    configuredAt = models.DateTimeField(auto_now=True)
+    isActive = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Verify.ET automation: {'ON' if self.autoVerificationEnabled else 'OFF'}"
+
+    @classmethod
+    def is_enabled(cls):
+        row = cls.objects.filter(isActive=True).first()
+        return bool(row and row.autoVerificationEnabled)
 
 
 class TokenActivity(models.Model):

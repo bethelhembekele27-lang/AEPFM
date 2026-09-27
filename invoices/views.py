@@ -20,12 +20,13 @@ from django.conf import settings
 
 from .models import (
     Auction, Winner, Invoice, InvoiceLot, Payment, Attachment, FeeConfig, AuditLog,OfficeSettings,
+    VerifyEtAutomationSettings,
 )
 from .serializers import (
     AuctionSerializer, WinnerSerializer, InvoiceListSerializer,
     InvoiceDetailSerializer, PaymentSerializer, AttachmentSerializer,
     AuditLogSerializer, FeeConfigSerializer, LoginSerializer, GoogleLoginSerializer,
-    _login_result, OfficeSettingsSerializer,
+    _login_result, OfficeSettingsSerializer, VerifyEtAutomationSettingsSerializer,
 )
 from .permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
 
@@ -478,6 +479,29 @@ class FeeConfigView(generics.GenericAPIView):
         FeeConfig.objects.filter(is_active=True).update(is_active=False)
         config = FeeConfig.objects.create(percentage=percentage, configured_by=request.user, is_active=True)
         return Response(FeeConfigSerializer(config).data)
+
+
+class VerifyEtAutomationSettingsView(generics.GenericAPIView):
+    """GET current automation state, PUT to change it — admin-only,
+    same gate as FeeConfig (manage_fee_config)."""
+    serializer_class = VerifyEtAutomationSettingsSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        row = VerifyEtAutomationSettings.objects.filter(isActive=True).first()
+        if not row:
+            return Response({'autoVerificationEnabled': False, 'configuredBy': '', 'configuredAt': None})
+        return Response(VerifyEtAutomationSettingsSerializer(row).data)
+
+    def put(self, request):
+        if not has_permission(request.user, 'manage_fee_config'):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        enabled = bool(request.data.get('autoVerificationEnabled'))
+        VerifyEtAutomationSettings.objects.filter(isActive=True).update(isActive=False)
+        row = VerifyEtAutomationSettings.objects.create(
+            autoVerificationEnabled=enabled, configuredBy=request.user, isActive=True,
+        )
+        return Response(VerifyEtAutomationSettingsSerializer(row).data)
 
 
 # ================================================================= Auth View
