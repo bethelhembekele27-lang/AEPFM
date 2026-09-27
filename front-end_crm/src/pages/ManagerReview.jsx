@@ -37,32 +37,108 @@ import VerifyEtPanel, { ShieldIcon } from "../components/VerifyEtPanel";
 function AutoVerifyToggle({ token }) {
   const [enabled, setEnabled] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     apiCall('/api/verify-et-automation/', { headers: token ? { Authorization: `Token ${token}` } : {} })
       .then((r) => r.json()).then((d) => setEnabled(!!d.autoVerificationEnabled)).catch(() => {});
   }, []);
 
-  async function toggle() {
+  async function commit(next) {
     setSaving(true);
     try {
       const res = await apiCall('/api/verify-et-automation/', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Token ${token}` } : {}) },
-        body: JSON.stringify({ autoVerificationEnabled: !enabled }),
+        body: JSON.stringify({ autoVerificationEnabled: next }),
       });
-      if (res.ok) setEnabled(!enabled);
-    } finally { setSaving(false); }
+      if (res.ok) setEnabled(next);
+    } finally {
+      setSaving(false);
+      setConfirming(false);
+    }
+  }
+
+  function handleClick() {
+    if (enabled) commit(false);       // turning off: no confirmation needed
+    else setConfirming(true);          // turning on: confirm first
   }
 
   if (enabled === null) return null;
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: "var(--text-2)" }}>
-      <span>Automatic verification: <strong style={{ color: enabled ? "var(--green)" : "var(--text-3)" }}>{enabled ? "ON" : "OFF"}</strong></span>
-      <button className={`btn btn-sm ${enabled ? "btn-danger" : "btn-brass"}`} onClick={toggle} disabled={saving}>
-        {saving ? "Saving..." : enabled ? "Turn off" : "Turn on"}
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 12, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+        Auto-verify
+      </span>
+      <button
+        role="switch"
+        aria-checked={enabled}
+        onClick={handleClick}
+        disabled={saving}
+        style={{
+          position: "relative", width: 44, height: 24, borderRadius: 12, padding: 0,
+          border: "1px solid var(--border)", cursor: saving ? "default" : "pointer",
+          background: enabled ? "var(--green)" : "var(--gray-bg)", transition: "background .15s",
+        }}
+        title={enabled ? "Automatic verification is ON" : "Automatic verification is OFF"}
+      >
+        <span style={{
+          position: "absolute", top: 1, left: enabled ? 21 : 1, width: 20, height: 20,
+          borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+          transition: "left .15s",
+        }} />
       </button>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: enabled ? "var(--green)" : "var(--text-3)", minWidth: 26 }}>
+        {enabled ? "ON" : "OFF"}
+      </span>
+
+      {confirming && (
+        <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) setConfirming(false); }}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-head">
+              <h3 style={{ margin: 0, fontSize: 15 }}>Turn on automatic verification?</h3>
+              <button className="modal-close" onClick={() => setConfirming(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 16 }}>
+                Once on, incoming receipts with a clear, matching Verify.ET result will be
+                approved or rejected automatically — no manager click required. Ambiguous
+                cases still wait for manual review. This can be turned off instantly at any time.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-brass" onClick={() => commit(true)} disabled={saving}>
+                  {saving ? "Turning on..." : "Turn on"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={saving}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function VerifyEtCell({ payment, onOpen }) {
+  const check = payment.verifyEtCheck;
+  const open = (e) => { e.stopPropagation(); onOpen(payment); };
+  if (!check) {
+    return (
+      <button className="btn btn-sm btn-icon-only" title="Verify with Verify.ET" onClick={open}>
+        <ShieldIcon />
+      </button>
+    );
+  }
+  if (check.processingStatus !== "completed") {
+    return <span className="stamp under_verification" style={{ cursor: "pointer" }} onClick={open}>Checking…</span>;
+  }
+  const color = check.settlementMatched === false ? "cancelled" : check.verified ? "paid" : "cancelled";
+  const label = check.settlementMatched === false ? "Wrong account" : check.verified ? "Verified" : "Not verified";
+  return (
+    <span className={`stamp ${color}`} style={{ cursor: "pointer" }} title="Click to view or re-check" onClick={open}>
+      {label}
+    </span>
   );
 }
 
@@ -215,14 +291,16 @@ export default function ManagerReview({ role, privileges, token }) {
           <h2 style={{ margin: "0 0 4px", fontSize: 21 }}>Receipt verification</h2>
           <div style={{ fontSize: 13, color: "var(--text-2)" }}>Review submitted payment receipts before marking invoices as paid.</div>
         </div>
-        {counts.pending_manager_review > 0 && (
-          <div style={{ fontSize: 12.5, color: "var(--amber)", fontWeight: 600 }}>
-            {counts.pending_manager_review} pending review
-          </div>
-        )}
-        {(privileges || []).includes("manage_fee_config") && (
-          <AutoVerifyToggle token={token} />
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {canManage && (privileges || []).includes("manage_fee_config") && (
+            <AutoVerifyToggle token={token} />
+          )}
+          {counts.pending_manager_review > 0 && (
+            <div style={{ fontSize: 12.5, color: "var(--amber)", fontWeight: 600 }}>
+              {counts.pending_manager_review} pending review
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: restrictedView ? "1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 22 }}>
@@ -287,6 +365,7 @@ export default function ManagerReview({ role, privileges, token }) {
                   {canManage && <input type="checkbox" checked={filteredRows.length > 0 && selected.length === filteredRows.length} onChange={toggleAll} />}
                 </th>
                 <th>Bidder</th><th>Invoice</th><th>Amount</th><th>{tab === "pending_manager_review" ? "Submitted" : "Reviewed"}</th>
+                <th>Verify.ET</th>
                 {tab !== "pending_manager_review" && <th>Status</th>}
               </tr>
             </thead>
@@ -328,16 +407,8 @@ export default function ManagerReview({ role, privileges, token }) {
                     {tab !== "pending_manager_review" && (
                       <td><span className={`stamp ${tab === "manager_approved" ? "paid" : "cancelled"}`}>{tab === "manager_approved" ? "Approved" : "Rejected"}</span></td>
                     )}
-                    <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
-                      {tab === "pending_manager_review" && (
-                        <button
-                          className="btn btn-sm btn-icon-only"
-                          title="Verify with Verify.ET"
-                          onClick={(e) => { e.stopPropagation(); setVerifyModalRow(p); }}
-                        >
-                          <ShieldIcon />
-                        </button>
-                      )}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <VerifyEtCell payment={p} onOpen={setVerifyModalRow} />
                     </td>
                   </tr>
                 );

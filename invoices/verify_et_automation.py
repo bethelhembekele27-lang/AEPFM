@@ -86,9 +86,12 @@ def maybe_auto_verify(payment):
 
     if verified is True and settlement_matched is not False and amount_ok:
         _apply_decision(payment, 'approve', reference, result)
-    elif verified is False or settlement_matched is False:
+    elif (verified is False or settlement_matched is False) and amount_ok:
         _apply_decision(payment, 'reject', reference, result)
-    # else: ambiguous (verified True but amount off, verified None, etc.) — leave for a human
+    # else: ambiguous — leave for a human, including a rejected-looking result
+    # whose amount doesn't line up. Auto-reject also texts the bidder, and a
+    # misread reference number would otherwise reject a real payment on the
+    # strength of an OCR guess, so both decisions require the amount to match.
 
 
 def _get_or_extract_fields(payment):
