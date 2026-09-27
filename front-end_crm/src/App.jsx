@@ -47,7 +47,25 @@ export default function App() {
 
     return null;
   });
-  const [theme, setTheme] = useState("light");
+  // localStorage, not sessionStorage: a display preference shouldn't behave
+// like a credential and disappear when the tab or session closes. Shared
+// across accounts on the same browser, matching how PublicInvoice.jsx
+// already persists the language toggle.
+const [theme, setTheme] = useState(() => {
+  try {
+    return localStorage.getItem("theme") === "dark" ? "dark" : "light";
+  } catch {
+    return "light";  // storage blocked (private mode, etc.)
+  }
+});
+
+useEffect(() => {
+  try {
+    localStorage.setItem("theme", theme);
+  } catch {
+    // storage unavailable — theme just won't survive a refresh
+  }
+}, [theme]);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [detailInvoiceId, setDetailInvoiceId] = useState(null);
   const [smsInvoiceId, setSmsInvoiceId] = useState(null);
