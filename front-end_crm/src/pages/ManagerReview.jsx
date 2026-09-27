@@ -124,11 +124,17 @@ function AutoVerifyToggle({ token }) {
 function VerifyEtCell({ payment, onOpen }) {
   const check = payment.verifyEtCheck;
   const open = (e) => { e.stopPropagation(); onOpen(payment); };
-  if (!check) {
-    return <button className="btn btn-sm btn-icon-only" title="Verify with Verify.ET" onClick={open}><ShieldIcon /></button>;
-  }
-  const { label, color } = verifyEtStatus(check, payment.amountPaid);
-  return <span className={`stamp ${color}`} style={{ cursor: "pointer" }} title="Click to view or re-check" onClick={open}>{label}</span>;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <button className="btn btn-sm btn-icon-only" title="Verify with Verify.ET" onClick={open}>
+        <ShieldIcon />
+      </button>
+      {check && (() => {
+        const { label, color } = verifyEtStatus(check, payment.amountPaid);
+        return <span className={`stamp ${color}`} style={{ cursor: "pointer" }} onClick={open}>{label}</span>;
+      })()}
+    </div>
+  );
 }
 
 function ConfidenceBadge({ level }) {
@@ -322,6 +328,8 @@ export default function ManagerReview({ role, privileges, token }) {
 
       <div className="filters" style={{ marginBottom: 16 }}>
         <input
+          className="grow"
+          style={{ width: 280 }}
           value={quickInvoice}
           onChange={(e) => setQuickInvoice(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") quickFind(); }}
@@ -536,6 +544,18 @@ export default function ManagerReview({ role, privileges, token }) {
 
                 {drawerRow.extraction ? (
                   <div className="card" style={{ background: "var(--paper)", padding: 16 }}>
+                    {drawerRow.extraction && (drawerRow.extraction.detectedBank || drawerRow.extraction.bankReferenceNumber || drawerRow.extraction.detectedPhoneNumber) && (
+                      <div style={{ background: "var(--blue-bg)", border: "1px solid var(--blue)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--blue)", marginBottom: 8 }}>
+                          Detected for Verify.ET
+                        </div>
+                        <div className="field-grid" style={{ marginBottom: 0, gap: "8px 20px" }}>
+                          <div className="field"><div className="fl">Bank</div><div className="fv">{drawerRow.extraction.detectedBank || "—"}</div></div>
+                          <div className="field"><div className="fl">Reference #</div><div className="fv mono">{drawerRow.extraction.bankReferenceNumber || "—"}</div></div>
+                          <div className="field"><div className="fl">Phone</div><div className="fv mono">{drawerRow.extraction.detectedPhoneNumber || "—"}</div></div>
+                        </div>
+                      </div>
+                    )}
                     <div className="field-grid" style={{ marginBottom: 0, gap: "10px 20px" }}>
                       <div className="field"><div className="fl">TIN</div><div className="fv mono">{drawerRow.extraction.tin || "—"}</div></div>
                       <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{drawerRow.extraction.receiptNumber || "—"}</div></div>

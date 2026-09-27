@@ -20,7 +20,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
   const [bank, setBank] = useState(detectedBank);
   const [ref, setRef] = useState(payment?.bidderReferenceNumber || payment?.extraction?.bankReferenceNumber || "");
   const [suffix, setSuffix] = useState(payment?.bidderAccountSuffix || "");
-  const [phone, setPhone] = useState(payment?.bidderPhoneNumber || "");
+  const [phone, setPhone] = useState(payment?.bidderPhoneNumber || payment?.extraction?.detectedPhoneNumber || "");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [check, setCheck] = useState(payment?.verifyEtCheck || null);
@@ -61,7 +61,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
       </div>
 
       <div style={{ padding: 16 }}>
-        <div className="section-label" style={{ marginTop: 0, marginBottom: 10 }}>Enter payment details</div>
+        <div className="section-label" style={{ marginTop: 0, marginBottom: 10 }}>Payment details</div>
         <div className="field-grid" style={{ marginBottom: 10, gap: "10px 20px" }}>
           <div className="field">
             <div className="fl">Bank</div>

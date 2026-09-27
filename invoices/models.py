@@ -321,7 +321,10 @@ class Payment(models.Model):
     # knows their own account is the only reliable source for a CBE/BoA suffix.
     bidderBank = models.CharField(max_length=30, blank=True, default='')
     bidderReferenceNumber = models.CharField(max_length=100, blank=True, default='')
-    bidderAccountSuffix = models.CharField(max_length=20, blank=True, default='')
+    bidderAccountSuffix = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text="Last 8 digits of the bidder's account, computed server-side from the full account number they typed — never typed directly by the bidder.",
+    )
     bidderPhoneNumber = models.CharField(max_length=20, blank=True, default='')
 
     def __str__(self):

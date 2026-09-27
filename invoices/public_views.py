@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import logging
+import re
 
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
@@ -204,6 +205,13 @@ class PublicReceiptUploadView(APIView):
         except InvalidOperation:
             amount_paid = invoice.totalAmount
 
+        # The bidder types their whole account number; we derive the 8-digit
+        # suffix Verify.ET wants. Asking them to count out the last 8 digits
+        # themselves just invites typos in a field that gates auto-approval.
+        raw_account = (request.data.get('bidderAccountNumber') or '').strip()
+        account_digits = re.sub(r'\D', '', raw_account)
+        bidder_account_suffix = account_digits[-8:] if account_digits else ''
+
         payment = Payment.objects.create(
             invoice=invoice,
             amountPaid=amount_paid,
@@ -215,7 +223,7 @@ class PublicReceiptUploadView(APIView):
             paymentStatus='pending',
             bidderBank=(request.data.get('bidderBank') or '').strip().lower(),
             bidderReferenceNumber=(request.data.get('bidderReferenceNumber') or '').strip(),
-            bidderAccountSuffix=(request.data.get('bidderAccountSuffix') or '').strip(),
+            bidderAccountSuffix=bidder_account_suffix,
             bidderPhoneNumber=(request.data.get('bidderPhoneNumber') or '').strip(),
         )
 

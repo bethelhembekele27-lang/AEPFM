@@ -167,7 +167,7 @@ export default function PublicInvoice({ token }) {
   // not in the image — the bidder is the only one who can supply it.
   const [bidderBank, setBidderBank] = useState("");
   const [bidderReferenceNumber, setBidderReferenceNumber] = useState("");
-  const [bidderAccountSuffix, setBidderAccountSuffix] = useState("");
+  const [bidderAccountNumber, setBidderAccountNumber] = useState("");
   const [bidderPhoneNumber, setBidderPhoneNumber] = useState("");
   const [fileErrorKey, setFileErrorKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -244,7 +244,7 @@ export default function PublicInvoice({ token }) {
     formData.append("receiptFile", receiptFile);
     if (bidderBank) formData.append("bidderBank", bidderBank);
     if (bidderReferenceNumber.trim()) formData.append("bidderReferenceNumber", bidderReferenceNumber.trim());
-    if (bidderAccountSuffix.trim()) formData.append("bidderAccountSuffix", bidderAccountSuffix.trim());
+    if (bidderAccountNumber.trim()) formData.append("bidderAccountNumber", bidderAccountNumber.trim());
     if (bidderPhoneNumber.trim()) formData.append("bidderPhoneNumber", bidderPhoneNumber.trim());
     // amountPaid / paymentMethod / paymentDate are deliberately NOT sent -
     // the backend defaults these server-side (see public_views.py).
@@ -389,8 +389,8 @@ export default function PublicInvoice({ token }) {
                   )}
                   {["cbe", "boa"].includes(bidderBank) && (
                     <div className="field" style={{ marginBottom: 10 }}>
-                      <div className="fl">Your account number's last 8 digits <span style={{ fontWeight: 400, color: "var(--text-3)" }}>(your own account — the receipt only shows the last 4)</span></div>
-                      <input value={bidderAccountSuffix} onChange={(e) => setBidderAccountSuffix(e.target.value)} />
+                      <div className="fl">Your bank account number (the one you sent from)</div>
+                      <input value={bidderAccountNumber} onChange={(e) => setBidderAccountNumber(e.target.value)} inputMode="numeric" />
                     </div>
                   )}
                   {bidderBank === "cbebirr" && (
