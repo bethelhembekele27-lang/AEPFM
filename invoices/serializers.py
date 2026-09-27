@@ -453,7 +453,7 @@ class VerifyEtCheckSerializer(serializers.ModelSerializer):
             'bank', 'referenceNumber', 'accountSuffix', 'phoneNumber',
             'processingStatus', 'verified', 'amount', 'currency',
             'senderName', 'receiverName', 'settlementMatched',
-            'possibleDuplicate', 'errorMessage', 'checkedAt',
+            'possibleDuplicate', 'pendingDuplicate', 'errorMessage', 'checkedAt',
         ]
 
 

@@ -31,35 +31,37 @@ def _amounts_match(verify_amount, invoice_amount):
         return False
 
 
-def is_possible_duplicate_reference(bank, reference, exclude_payment_id=None):
+def check_reference_reuse(bank, reference, exclude_payment_id=None):
     """
-    True if this exact bank+referenceNumber has already been verified AND
-    approved against a DIFFERENT payment.
+    Returns (approved_elsewhere, pending_elsewhere).
 
     Verify.ET's `verified: true` only confirms a real transaction with that
     reference exists somewhere — it says nothing about which invoice it was
     for. So without this, a bidder could resubmit a genuine reference from a
     past, already-settled auction of their own against an unrelated new
-    invoice, and the amount would often match too. A real reference should
-    only ever justify one invoice being marked paid.
+    invoice, and the amount would often match too.
 
-    Known limitation: only compares against already-APPROVED payments. Two
-    receipts with the same reference sitting unreviewed at the same time
-    won't be caught, because neither is approved yet. Tightening this to
-    consider pending payments as well is a deliberate future change — it
-    would also flag a legitimate case where a bidder resubmits a receipt
-    after a rejection.
+    Two severities, because the two cases mean different things:
+      approved_elsewhere — reused on a payment already manager_approved. Strong
+        signal; this is the dangerous one, since a real reference is being
+        claimed a second time for a second invoice.
+      pending_elsewhere — reused on a payment still awaiting review. Weaker:
+        could be an honest double submission or a bidder who uploaded the
+        same receipt twice. Still blocks automatic action (we can't tell them
+        apart) but is surfaced to reviewers as a calmer status.
+
+    Both exclude this payment, so re-running a check on the same row doesn't
+    flag itself.
     """
     if not bank or not reference:
-        return False
+        return False, False
     from .models import VerifyEtCheck
-    qs = VerifyEtCheck.objects.filter(
-        bank=bank, referenceNumber=reference, verified=True,
-        payment__verificationStatus='manager_approved',
-    )
+    qs = VerifyEtCheck.objects.filter(bank=bank, referenceNumber=reference, verified=True)
     if exclude_payment_id:
         qs = qs.exclude(payment_id=exclude_payment_id)
-    return qs.exists()
+    approved_elsewhere = qs.filter(payment__verificationStatus='manager_approved').exists()
+    pending_elsewhere = qs.filter(payment__verificationStatus='pending_manager_review').exists()
+    return approved_elsewhere, pending_elsewhere
 
 
 def process_new_receipt(payment):
@@ -95,7 +97,7 @@ def process_new_receipt(payment):
     if result.get('processingStatus') != 'completed':
         return  # still queued — a human can re-check later, don't guess
 
-    duplicate = is_possible_duplicate_reference(
+    approved_elsewhere, pending_elsewhere = check_reference_reuse(
         result.get('bank', bank or ''), reference, exclude_payment_id=payment.id,
     )
 
@@ -115,22 +117,23 @@ def process_new_receipt(payment):
             'receiverName': result.get('receiverName', ''),
             'receiverAccount': result.get('receiverAccount', ''),
             'settlementMatched': result.get('settlementMatched'),
-            'possibleDuplicate': duplicate,
+            'possibleDuplicate': approved_elsewhere,
+            'pendingDuplicate': pending_elsewhere,
             'rawResponse': result.get('rawResponse', {}),
             'errorMessage': '',
             'checkedBy': None,  # system action, not a human reviewer
         },
     )
 
-    if duplicate:
-        # Never auto-approve OR auto-reject a reused reference: a real
+    if approved_elsewhere or pending_elsewhere:
+        # Never auto-approve OR auto-reject on a reused reference: a real
         # transaction matching a reused reference can look perfectly valid to
         # Verify.ET while actually belonging to a different invoice. A human
-        # has to decide. The check row is already saved above with the flag,
+        # has to decide. The check row is already saved above with the flags,
         # so the reviewer sees the warning in the queue.
         logger.warning(
-            "Auto-verify: payment #%s reuses a reference already approved on another payment — leaving for manual review",
-            payment.id,
+            "Auto-verify: payment #%s reference reused (approved_elsewhere=%s, pending_elsewhere=%s) — leaving for manual review",
+            payment.id, approved_elsewhere, pending_elsewhere,
         )
         return
 

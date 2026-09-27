@@ -492,7 +492,11 @@ class VerifyEtCheck(models.Model):
     settlementMatched = models.BooleanField(null=True, blank=True)
     possibleDuplicate = models.BooleanField(
         default=False,
-        help_text="True if this bank+referenceNumber combination was already verified and approved against a different payment — a real transaction reference reused across invoices.",
+        help_text="True if this bank+referenceNumber is already tied to a different, ALREADY-APPROVED payment.",
+    )
+    pendingDuplicate = models.BooleanField(
+        default=False,
+        help_text="True if this bank+referenceNumber also appears on a different PENDING (not yet reviewed) payment — a weaker signal than possibleDuplicate.",
     )
     rawResponse = models.JSONField(default=dict, blank=True)
     errorMessage = models.TextField(blank=True, default='')

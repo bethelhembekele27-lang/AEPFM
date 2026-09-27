@@ -17,6 +17,9 @@ export function verifyEtStatus(check, amountPaid) {
   if (check.possibleDuplicate) {
     return { label: "Duplicate reference", color: "cancelled" };
   }
+  if (check.pendingDuplicate) {
+    return { label: "Also pending elsewhere", color: "pending_payment" };
+  }
   if (check.settlementMatched === false) {
     return { label: "Wrong account", color: "cancelled" };
   }

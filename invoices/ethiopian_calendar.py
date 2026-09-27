@@ -74,7 +74,10 @@ def parse_and_convert(raw_text):
     """
     if not raw_text:
         return None
-    match = re.match(r'^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})$', raw_text.strip())
+    match = re.match(
+        r'^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})\s*(?:ዓ\.?ም\.?|E\.?C\.?)?$',
+        raw_text.strip(),
+    )
     if not match:
         return None
 

@@ -13,7 +13,9 @@ FAST_PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 from invoices.models import (
     Role, StaffProfile, Winner, Invoice, InvoiceLot, AuditLog, Payment,
+    VerifyEtCheck, VerifyEtAutomationSettings,
 )
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 def make_user(username, role_name, privileges):
@@ -353,3 +355,277 @@ class StatusTransitionTests(TestCase):
         from invoices.permissions import can_transition
         admin = make_user('admin_t2', 'Administrator', ['override_status'])
         self.assertTrue(can_transition('paid', 'pending_payment', admin))
+
+
+class EthiopianCalendarTests(TestCase):
+    """
+    Pure date arithmetic — no DB or network. This module was previously
+    untested despite its own docstring claiming the formula had been
+    cross-checked by hand.
+    """
+
+    def test_new_year_anchor_leap_case(self):
+        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        self.assertEqual(ethiopian_to_gregorian(2016, 1, 1).isoformat(), '2023-09-12')
+
+    def test_new_year_anchor_non_leap_case(self):
+        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        self.assertEqual(ethiopian_to_gregorian(2018, 1, 1).isoformat(), '2025-09-11')
+
+    def test_pagume_day_range_enforced(self):
+        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        with self.assertRaises(ValueError):
+            ethiopian_to_gregorian(2016, 13, 7)
+
+    def test_month_13_day_6_is_valid(self):
+        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        self.assertTrue(ethiopian_to_gregorian(2016, 13, 6).isoformat())
+
+    def test_day_31_rejected(self):
+        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        with self.assertRaises(ValueError):
+            ethiopian_to_gregorian(2016, 1, 31)
+
+    def test_parse_and_convert_valid_slash_date(self):
+        from invoices.ethiopian_calendar import parse_and_convert
+        self.assertTrue(parse_and_convert('16/12/2016').startswith('20'))
+
+    def test_parse_and_convert_declines_modern_looking_year(self):
+        """2020s is implausible as an Ethiopian year, so we decline."""
+        from invoices.ethiopian_calendar import parse_and_convert
+        self.assertIsNone(parse_and_convert('16/12/2026'))
+
+    def test_parse_and_convert_short_year_normalized(self):
+        from invoices.ethiopian_calendar import parse_and_convert
+        self.assertEqual(parse_and_convert('16/12/16'), parse_and_convert('16/12/2016'))
+
+    def test_parse_and_convert_rejects_unparseable_text(self):
+        from invoices.ethiopian_calendar import parse_and_convert
+        self.assertIsNone(parse_and_convert('Sep 25, 2026, 10:00 AM'))
+        self.assertIsNone(parse_and_convert(''))
+        self.assertIsNone(parse_and_convert(None))
+
+    def test_parse_and_convert_tolerates_calendar_suffix(self):
+        from invoices.ethiopian_calendar import parse_and_convert
+        self.assertEqual(parse_and_convert('16/12/2016'), parse_and_convert('16/12/2016 ዓ.ም'))
+        self.assertEqual(parse_and_convert('16/12/2016'), parse_and_convert('16/12/2016 E.C.'))
+
+
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
+class VerifyEtAutomationTests(TestCase):
+    """
+    Direct tests of the automatic approve/reject decision logic, isolated
+    from the public upload endpoint. check_transaction is always mocked, so
+    the suite never touches verify.et.
+    """
+
+    def setUp(self):
+        self.invoice = make_invoice(status='pending_payment')
+        self.payment = Payment.objects.create(
+            invoice=self.invoice, amountPaid=self.invoice.totalAmount,
+            paymentMethod='bank_transfer', paymentDate='2026-01-15',
+            bidderBank='cbe', bidderReferenceNumber='FT-AUTO-1',
+            submittedViaPublicLink=True, verificationStatus='pending_manager_review',
+        )
+        VerifyEtAutomationSettings.objects.create(autoVerificationEnabled=True, isActive=True)
+
+    def _completed_result(self, **overrides):
+        result = {
+            'bank': 'cbe', 'requestId': 'r1', 'processingStatus': 'completed',
+            'verified': True, 'amount': str(self.invoice.totalAmount), 'currency': 'ETB',
+            'senderName': 'X', 'receiverName': 'Auction Ethiopia', 'receiverAccount': 'x',
+            'settlementMatched': None, 'rawResponse': {}, 'errorMessage': '',
+        }
+        result.update(overrides)
+        return result
+
+    def _run(self, verify_result):
+        from invoices.verify_et_automation import process_new_receipt
+        with override_settings(VERIFY_ET_API_KEY='test-key'), \
+             patch('invoices.verify_et_automation.check_transaction',
+                   return_value=(verify_result, None)):
+            process_new_receipt(self.payment)
+        self.payment.refresh_from_db()
+        self.invoice.refresh_from_db()
+
+    def test_disabled_automation_never_calls_provider(self):
+        VerifyEtAutomationSettings.objects.all().update(autoVerificationEnabled=False)
+        with override_settings(VERIFY_ET_API_KEY='test-key'), \
+             patch('invoices.verify_et_automation.check_transaction') as mock_check:
+            from invoices.verify_et_automation import process_new_receipt
+            process_new_receipt(self.payment)
+        mock_check.assert_not_called()
+
+    def test_verified_and_amount_match_auto_approves(self):
+        self._run(self._completed_result())
+        self.assertEqual(self.invoice.status, 'paid')
+        self.assertEqual(self.payment.verificationStatus, 'manager_approved')
+        self.assertTrue(self.payment.autoReviewed)
+
+    def test_amount_mismatch_leaves_pending(self):
+        self._run(self._completed_result(amount='1.00'))
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+        self.assertFalse(self.payment.autoReviewed)
+
+    def test_verified_false_with_matching_amount_auto_rejects(self):
+        self._run(self._completed_result(verified=False))
+        self.assertEqual(self.invoice.status, 'pending_payment')
+        self.assertEqual(self.payment.verificationStatus, 'manager_rejected')
+
+    def test_verified_false_with_amount_mismatch_does_not_reject(self):
+        """An OCR misread must never text a bidder that a real payment failed."""
+        self._run(self._completed_result(verified=False, amount='1.00'))
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+        self.assertFalse(self.payment.autoReviewed)
+
+    def test_settlement_mismatch_auto_rejects_even_if_verified_true(self):
+        self._run(self._completed_result(verified=True, settlementMatched=False))
+        self.assertEqual(self.payment.verificationStatus, 'manager_rejected')
+
+    def test_still_queued_makes_no_decision(self):
+        self._run({'processingStatus': 'queued', 'verified': None, 'amount': None,
+                   'currency': '', 'senderName': '', 'receiverName': '', 'receiverAccount': '',
+                   'settlementMatched': None, 'rawResponse': {}, 'errorMessage': '',
+                   'bank': 'cbe', 'requestId': 'r2'})
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+
+    def test_approved_duplicate_blocks_auto_decision(self):
+        other_invoice = make_invoice(status='paid')
+        other_payment = Payment.objects.create(
+            invoice=other_invoice, amountPaid=other_invoice.totalAmount,
+            paymentMethod='bank_transfer', paymentDate='2026-01-01',
+            verificationStatus='manager_approved',
+        )
+        VerifyEtCheck.objects.create(payment=other_payment, bank='cbe',
+                                     referenceNumber='FT-AUTO-1', verified=True,
+                                     processingStatus='completed')
+        self._run(self._completed_result())
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+        self.assertTrue(self.payment.verifyEtCheck.possibleDuplicate)
+
+    def test_pending_duplicate_blocks_auto_decision(self):
+        other_invoice = make_invoice(status='pending_payment')
+        other_payment = Payment.objects.create(
+            invoice=other_invoice, amountPaid=other_invoice.totalAmount,
+            paymentMethod='bank_transfer', paymentDate='2026-01-01',
+            verificationStatus='pending_manager_review',
+        )
+        VerifyEtCheck.objects.create(payment=other_payment, bank='cbe',
+                                     referenceNumber='FT-AUTO-1', verified=True,
+                                     processingStatus='completed')
+        self._run(self._completed_result())
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+        check = self.payment.verifyEtCheck
+        self.assertTrue(check.pendingDuplicate)
+        self.assertFalse(check.possibleDuplicate)
+
+
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
+class EndToEndInvoiceLifecycleTests(TestCase):
+    """
+    One real workflow through the actual public and authenticated APIs:
+    invoice created -> bidder uploads receipt -> automation checks with
+    Verify.ET (mocked) -> invoice auto-approved -> visible to staff.
+
+    Only the external provider is mocked; the upload endpoint, automation
+    engine, audit trail and read APIs all run for real.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = make_user('e2e_admin', 'Administrator', [
+            'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic',
+            'verify_payment', 'import_batches', 'view_dashboard', 'view_reports',
+            'view_audit', 'manage_call_center', 'view_call_center_dashboard',
+            'manage_users', 'manager_verify_receipt', 'send_sms', 'delete_records',
+            'extend_due_date', 'upload_payment_proof',
+        ])
+        self.auth(self.admin)
+
+    def auth(self, user):
+        token, _ = Token.objects.get_or_create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def _make_invoice(self, lot_ref, amount='10000.00'):
+        res = self.client.post('/api/winners/manual/', {
+            'bidderName': 'E2E Tester', 'winnerPhone': '251911223344', 'companyName': '',
+            'lots': [{'lotNumber': lot_ref, 'auctionName': 'E2E Auction', 'winningAmount': amount}],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        return Invoice.objects.get(id=res.data['id'])
+
+    def _submit_receipt(self, invoice, reference, verify_result):
+        # The real public path: unauthenticated.
+        self.client.credentials()
+        fake_receipt = SimpleUploadedFile('receipt.jpg', b'\xff\xd8\xff' + (b'0' * 25000),
+                                          content_type='image/jpeg')
+        with patch('invoices.public_views._validate_receipt_file', return_value=None), \
+             patch('invoices.verify_et_automation.check_transaction',
+                   return_value=(verify_result, None)):
+            res = self.client.post(
+                f'/api/public/invoice/{invoice.publicToken}/receipt/',
+                {'receiptFile': fake_receipt, 'bidderBank': 'cbe',
+                 'bidderReferenceNumber': reference, 'bidderAccountNumber': '1000643970701'},
+                format='multipart',
+            )
+        self.auth(self.admin)
+        return res
+
+    def _verify_result(self, invoice, **over):
+        result = {
+            'bank': 'cbe', 'requestId': 'e2e-req', 'processingStatus': 'completed',
+            'verified': True, 'amount': str(invoice.totalAmount), 'currency': 'ETB',
+            'senderName': 'E2E Tester', 'receiverName': 'Auction Ethiopia',
+            'receiverAccount': '1000643970701', 'settlementMatched': True,
+            'rawResponse': {}, 'errorMessage': '',
+        }
+        result.update(over)
+        return result
+
+    def test_full_lifecycle_auto_approved(self):
+        VerifyEtAutomationSettings.objects.create(autoVerificationEnabled=True,
+                                                  configuredBy=self.admin, isActive=True)
+        invoice = self._make_invoice('E2E-1')
+
+        res = self.client.get(f'/api/public/invoice/{invoice.publicToken}/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['invoiceNumber'], invoice.invoiceNumber)
+
+        with override_settings(VERIFY_ET_API_KEY='test-key', GEMINI_API_KEY=''):
+            res = self._submit_receipt(invoice, 'FT-E2E-0001', self._verify_result(invoice))
+        self.assertEqual(res.status_code, 201, res.content)
+        payment_id = res.data['paymentId']
+
+        invoice.refresh_from_db()
+        payment = Payment.objects.get(id=payment_id)
+        self.assertEqual(invoice.status, 'paid')
+        self.assertEqual(payment.verificationStatus, 'manager_approved')
+        self.assertTrue(payment.autoReviewed)
+        self.assertTrue(AuditLog.objects.filter(invoice=invoice,
+                                                actionType='auto_verify_et').exists())
+
+        res = self.client.get(f'/api/invoices/{invoice.id}/')
+        self.assertEqual(res.data['status'], 'paid')
+        res = self.client.get('/api/receipts/?verificationStatus=manager_approved')
+        self.assertTrue(any(p['id'] == payment_id for p in res.data))
+
+    def test_reused_reference_across_two_invoices_does_not_double_approve(self):
+        VerifyEtAutomationSettings.objects.create(autoVerificationEnabled=True,
+                                                  configuredBy=self.admin, isActive=True)
+
+        def go(lot_ref):
+            invoice = self._make_invoice(lot_ref, amount='5000.00')
+            with override_settings(VERIFY_ET_API_KEY='test-key', GEMINI_API_KEY=''):
+                res = self._submit_receipt(invoice, 'FT-SHARED-001',
+                                          self._verify_result(invoice, requestId=f'req-{lot_ref}'))
+            self.assertEqual(res.status_code, 201, res.content)
+            invoice.refresh_from_db()
+            return invoice, Payment.objects.get(id=res.data['paymentId'])
+
+        invoice_1, payment_1 = go('DUP-1')
+        self.assertEqual(invoice_1.status, 'paid')
+
+        invoice_2, payment_2 = go('DUP-2')
+        self.assertNotEqual(invoice_2.status, 'paid')
+        self.assertFalse(payment_2.autoReviewed)
+        self.assertTrue(payment_2.verifyEtCheck.possibleDuplicate)
