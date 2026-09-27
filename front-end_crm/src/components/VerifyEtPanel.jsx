@@ -59,6 +59,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
       </div>
 
       <div style={{ padding: 16 }}>
+        <div className="section-label" style={{ marginTop: 0, marginBottom: 10 }}>Enter payment details</div>
         <div className="field-grid" style={{ marginBottom: 10, gap: "10px 20px" }}>
           <div className="field">
             <div className="fl">Bank</div>
@@ -101,7 +102,8 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
         )}
 
         {check && check.processingStatus === "completed" && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <div style={{ marginTop: 18 }}>
+            <div className="section-label" style={{ margin: "0 0 10px" }}>Result</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span
                 className={`stamp ${check.settlementMatched === false ? "cancelled" : check.verified ? "paid" : "cancelled"}`}

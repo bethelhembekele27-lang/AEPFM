@@ -320,7 +320,7 @@ export default function ManagerReview({ role, privileges, token }) {
           <div style={{ fontSize: 13, color: "var(--text-2)" }}>Review submitted payment receipts before marking invoices as paid.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {canManage && (privileges || []).includes("manage_fee_config") && (
+          {canManage && role === "administrator" && (
             <AutoVerifyToggle token={token} />
           )}
           {counts.pending_manager_review > 0 && (
@@ -331,18 +331,18 @@ export default function ManagerReview({ role, privileges, token }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+      <div className="filters" style={{ marginBottom: 16 }}>
         <input
+          className="grow"
           value={quickInvoice}
           onChange={(e) => setQuickInvoice(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") quickFind(); }}
           placeholder="Quick verify — type an invoice number..."
-          style={{ maxWidth: 260 }}
         />
-        <button className="btn btn-sm btn-brass" onClick={quickFind} disabled={quickSearching || !quickInvoice.trim()}>
+        <button className="btn btn-primary" onClick={quickFind} disabled={quickSearching || !quickInvoice.trim()}>
           {quickSearching ? "Searching..." : "Find & verify"}
         </button>
-        {quickError && <span style={{ fontSize: 12, color: "var(--red)" }}>{quickError}</span>}
+        {quickError && <span style={{ fontSize: 12, color: "var(--red)", marginLeft: 4 }}>{quickError}</span>}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: restrictedView ? "1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 22 }}>
