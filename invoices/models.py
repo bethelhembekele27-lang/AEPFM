@@ -315,6 +315,14 @@ class Payment(models.Model):
         default=False,
         help_text="True if this payment's status was set automatically by Verify.ET automation, not a human manager.",
     )
+    # Bidder-typed payment details. A bank receipt masks most of the account
+    # number (****5678), so those digits are simply not present in the image
+    # and no amount of OCR can recover them. Asking the person who actually
+    # knows their own account is the only reliable source for a CBE/BoA suffix.
+    bidderBank = models.CharField(max_length=30, blank=True, default='')
+    bidderReferenceNumber = models.CharField(max_length=100, blank=True, default='')
+    bidderAccountSuffix = models.CharField(max_length=20, blank=True, default='')
+    bidderPhoneNumber = models.CharField(max_length=20, blank=True, default='')
 
     def __str__(self):
         return f"{self.amountPaid} on {self.invoice.invoiceNumber}"

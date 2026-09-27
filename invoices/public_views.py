@@ -213,6 +213,10 @@ class PublicReceiptUploadView(APIView):
             submittedViaPublicLink=True,
             verificationStatus='pending_manager_review',
             paymentStatus='pending',
+            bidderBank=(request.data.get('bidderBank') or '').strip().lower(),
+            bidderReferenceNumber=(request.data.get('bidderReferenceNumber') or '').strip(),
+            bidderAccountSuffix=(request.data.get('bidderAccountSuffix') or '').strip(),
+            bidderPhoneNumber=(request.data.get('bidderPhoneNumber') or '').strip(),
         )
 
         if invoice.status == 'pending_payment':

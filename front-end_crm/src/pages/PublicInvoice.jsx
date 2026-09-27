@@ -162,6 +162,13 @@ export default function PublicInvoice({ token }) {
   const [loadErrorKey, setLoadErrorKey] = useState("");
 
   const [receiptFile, setReceiptFile] = useState(null);
+  // Optional bidder-supplied payment details. A bank receipt masks most of the
+  // account number (****5678), so for a CBE/BoA transfer the suffix simply is
+  // not in the image — the bidder is the only one who can supply it.
+  const [bidderBank, setBidderBank] = useState("");
+  const [bidderReferenceNumber, setBidderReferenceNumber] = useState("");
+  const [bidderAccountSuffix, setBidderAccountSuffix] = useState("");
+  const [bidderPhoneNumber, setBidderPhoneNumber] = useState("");
   const [fileErrorKey, setFileErrorKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -235,6 +242,10 @@ export default function PublicInvoice({ token }) {
     setSubmitting(true);
     const formData = new FormData();
     formData.append("receiptFile", receiptFile);
+    if (bidderBank) formData.append("bidderBank", bidderBank);
+    if (bidderReferenceNumber.trim()) formData.append("bidderReferenceNumber", bidderReferenceNumber.trim());
+    if (bidderAccountSuffix.trim()) formData.append("bidderAccountSuffix", bidderAccountSuffix.trim());
+    if (bidderPhoneNumber.trim()) formData.append("bidderPhoneNumber", bidderPhoneNumber.trim());
     // amountPaid / paymentMethod / paymentDate are deliberately NOT sent -
     // the backend defaults these server-side (see public_views.py).
 
@@ -358,6 +369,36 @@ export default function PublicInvoice({ token }) {
                 <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{t.uploadTitle}</h3>
                 <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 14 }}>{t.uploadHelp}</div>
                 <form onSubmit={handleSubmitReceipt}>
+                  <div className="field" style={{ marginBottom: 10 }}>
+                    <div className="fl">How did you pay? <span style={{ fontWeight: 400, color: "var(--text-3)" }}>(optional, speeds up verification)</span></div>
+                    <select value={bidderBank} onChange={(e) => setBidderBank(e.target.value)}>
+                      <option value="">Not sure / other</option>
+                      <option value="cbe">CBE</option>
+                      <option value="telebirr">Telebirr</option>
+                      <option value="boa">Bank of Abyssinia</option>
+                      <option value="dashen">Dashen Bank</option>
+                      <option value="awash">Awash Bank</option>
+                      <option value="cbebirr">CBE Birr</option>
+                    </select>
+                  </div>
+                  {bidderBank && (
+                    <div className="field" style={{ marginBottom: 10 }}>
+                      <div className="fl">Transaction / reference number</div>
+                      <input value={bidderReferenceNumber} onChange={(e) => setBidderReferenceNumber(e.target.value)} />
+                    </div>
+                  )}
+                  {["cbe", "boa"].includes(bidderBank) && (
+                    <div className="field" style={{ marginBottom: 10 }}>
+                      <div className="fl">Your account suffix (last 4 digits of your account number)</div>
+                      <input value={bidderAccountSuffix} onChange={(e) => setBidderAccountSuffix(e.target.value)} />
+                    </div>
+                  )}
+                  {bidderBank === "cbebirr" && (
+                    <div className="field" style={{ marginBottom: 10 }}>
+                      <div className="fl">Phone number used for the payment</div>
+                      <input value={bidderPhoneNumber} onChange={(e) => setBidderPhoneNumber(e.target.value)} placeholder="0911234567" />
+                    </div>
+                  )}
                   <div
                     className="filedrop"
                     onClick={() => document.getElementById("public-receipt-input")?.click()}

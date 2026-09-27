@@ -95,8 +95,20 @@ def maybe_auto_verify(payment):
 
 
 def _get_or_extract_fields(payment):
-    """Returns (reference, bank, suffix, phone) — from an existing extraction
-    if present, else runs one now (best-effort, never raises)."""
+    """Returns (reference, bank, suffix, phone).
+
+    A value the bidder typed themselves always beats one AI guessed off a
+    masked receipt image — for a CBE/BoA transfer the account suffix simply
+    is not printed, so OCR cannot possibly recover it. Fall back to extraction
+    only when the bidder didn't supply a reference.
+    """
+    if payment.bidderReferenceNumber:
+        return (
+            payment.bidderReferenceNumber,
+            payment.bidderBank or '',
+            payment.bidderAccountSuffix or '',
+            payment.bidderPhoneNumber or '',
+        )
     extraction = getattr(payment, 'extraction', None)
     if extraction is None and settings.GEMINI_API_KEY and payment.receiptFile:
         from .receipt_extraction import run_and_save_extraction

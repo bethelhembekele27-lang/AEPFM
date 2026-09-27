@@ -13,11 +13,13 @@ const PHONE_BANKS = ["cbebirr"];
 export const ShieldIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>);
 
 export default function VerifyEtPanel({ payment, token, onUpdated }) {
-  const detectedBank = payment?.extraction?.detectedBank || "";
+  // What the bidder typed beats what the AI guessed: a masked receipt can
+  // never yield a CBE/BoA account suffix, so OCR loses to a human here.
+  const detectedBank = payment?.bidderBank || payment?.extraction?.detectedBank || "";
   const [bank, setBank] = useState(detectedBank);
-  const [ref, setRef] = useState(payment?.extraction?.bankReferenceNumber || "");
-  const [suffix, setSuffix] = useState("");
-  const [phone, setPhone] = useState("");
+  const [ref, setRef] = useState(payment?.bidderReferenceNumber || payment?.extraction?.bankReferenceNumber || "");
+  const [suffix, setSuffix] = useState(payment?.bidderAccountSuffix || "");
+  const [phone, setPhone] = useState(payment?.bidderPhoneNumber || "");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [check, setCheck] = useState(payment?.verifyEtCheck || null);
@@ -64,7 +66,9 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
               {VERIFY_ET_BANKS.map((b) => <option key={b.v} value={b.v}>{b.l}</option>)}
             </select>
             {detectedBank && bank === detectedBank && (
-              <div style={{ fontSize: 11, color: "var(--blue)", marginTop: 4 }}>AI detected this bank from the receipt.</div>
+              <div style={{ fontSize: 11, color: "var(--blue)", marginTop: 4 }}>
+                {payment?.bidderBank ? "From the bidder's payment details." : "AI detected this bank from the receipt."}
+              </div>
             )}
             {!bank && (
               <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>
@@ -98,9 +102,14 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
 
         {check && check.processingStatus === "completed" && (
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span className={`stamp ${check.verified ? "paid" : "cancelled"}`}>{check.verified ? "Verified" : "Not verified"}</span>
-              {check.amount && <span className="mono" style={{ fontSize: 12.5, color: "var(--text-2)" }}>ETB {check.amount}</span>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span
+                className={`stamp ${check.settlementMatched === false ? "cancelled" : check.verified ? "paid" : "cancelled"}`}
+                style={{ fontSize: 12 }}
+              >
+                {check.settlementMatched === false ? "Wrong account" : check.verified ? "Verified" : "Not verified"}
+              </span>
+              {check.amount && <span className="mono amount" style={{ fontSize: 13.5 }}>ETB {check.amount}</span>}
             </div>
             {check.verified && (
               <div style={{ fontSize: 12.5, lineHeight: 1.7, color: "var(--text-2)" }}>

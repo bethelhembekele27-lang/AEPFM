@@ -481,6 +481,10 @@ class ManagerPaymentSerializer(PaymentSerializer):
             'submittedViaPublicLink',
             'extraction',
             'verifyEtCheck',
+            'bidderBank',
+            'bidderReferenceNumber',
+            'bidderAccountSuffix',
+            'bidderPhoneNumber',
         ]
 
     extraction = serializers.SerializerMethodField()

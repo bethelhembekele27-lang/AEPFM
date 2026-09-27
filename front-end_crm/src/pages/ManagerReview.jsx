@@ -178,6 +178,34 @@ export default function ManagerReview({ role, privileges, token }) {
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [verifyModalRow, setVerifyModalRow] = useState(null);
+  const [quickInvoice, setQuickInvoice] = useState("");
+  const [quickSearching, setQuickSearching] = useState(false);
+  const [quickError, setQuickError] = useState("");
+
+  async function quickFind() {
+    const wanted = quickInvoice.trim().toLowerCase();
+    if (!wanted) return;
+    setQuickError("");
+    setQuickSearching(true);
+    try {
+      const statuses = ["pending_manager_review", "manager_approved", "manager_rejected"];
+      for (const s of statuses) {
+        const res = await apiCall(`/api/receipts/?verificationStatus=${s}`, {
+          headers: token ? { Authorization: `Token ${token}` } : {},
+        });
+        const data = await res.json();
+        const rows = data && data.results ? data.results : (data || []);
+        const hit = rows.find((p) => (p.invoiceNumber || "").toLowerCase() === wanted);
+        if (hit) { setVerifyModalRow(hit); setQuickInvoice(""); return; }
+      }
+      setQuickError("No receipt found for that invoice number.");
+    } catch (err) {
+      setQuickError("Network error");
+      console.error(err);
+    } finally {
+      setQuickSearching(false);
+    }
+  }
 
   function openDrawerRow(row) {
     setDrawerRow(row);
@@ -301,6 +329,20 @@ export default function ManagerReview({ role, privileges, token }) {
             </div>
           )}
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+        <input
+          value={quickInvoice}
+          onChange={(e) => setQuickInvoice(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") quickFind(); }}
+          placeholder="Quick verify — type an invoice number..."
+          style={{ maxWidth: 260 }}
+        />
+        <button className="btn btn-sm btn-brass" onClick={quickFind} disabled={quickSearching || !quickInvoice.trim()}>
+          {quickSearching ? "Searching..." : "Find & verify"}
+        </button>
+        {quickError && <span style={{ fontSize: 12, color: "var(--red)" }}>{quickError}</span>}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: restrictedView ? "1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 22 }}>
