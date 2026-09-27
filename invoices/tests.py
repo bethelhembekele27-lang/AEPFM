@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 from unittest.mock import patch
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 
 from invoices.models import (
@@ -42,14 +42,22 @@ def make_invoice(status='pending_payment'):
     return invoice
 
 
-class PrivilegeGateTests(APITestCase):
+class PrivilegeGateTests(TestCase):
     """
     Hits each role against each privilege-gated endpoint and asserts who gets
     in (200) vs blocked (403). Every one of these corresponds to a real bug
     found by hand in an earlier session.
+
+    Plain django.test.TestCase rather than DRF's APITestCase: APITestCase
+    derives from TransactionTestCase, which flushes the whole database after
+    every test and dominated the suite's runtime. TestCase wraps each test in
+    a transaction instead, and we only need header-based token auth (not
+    APITestCase's login machinery) — but the client must still be an
+    APIClient, since Django's default test client is not DRF-aware.
     """
 
     def setUp(self):
+        self.client = APIClient()
         self.viewer = make_user('viewer_t', 'Viewer', ['view_invoices', 'view_dashboard'])
         self.finance = make_user('finance_t', 'Finance Manager', [
             'view_invoices', 'edit_invoice', 'generate_invoice', 'change_status_generic',
@@ -174,7 +182,7 @@ class PrivilegeGateTests(APITestCase):
         )
 
 
-class VerifyEtCheckTests(APITestCase):
+class VerifyEtCheckTests(TestCase):
     """
     Exercises POST /api/receipts/<id>/verify-transaction/ itself.
 
@@ -188,6 +196,8 @@ class VerifyEtCheckTests(APITestCase):
     NOT_CONFIGURED = 'Verify.ET is not configured on this server.'
 
     def setUp(self):
+        # APIClient, not django.test.Client — DRF auth needs the DRF client.
+        self.client = APIClient()
         from django.test import override_settings
         self.override = override_settings(VERIFY_ET_API_KEY='', VERIFY_ET_SETTLEMENT_ACCOUNTS={})
         self.override.enable()
