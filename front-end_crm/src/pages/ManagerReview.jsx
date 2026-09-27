@@ -329,12 +329,11 @@ export default function ManagerReview({ role, privileges, token }) {
       <div className="filters" style={{ marginBottom: 16 }}>
         <input
           className="grow"
-          style={{ width: 280 }}
+          style={{ width: 200 }}
           value={quickInvoice}
           onChange={(e) => setQuickInvoice(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") quickFind(); }}
-          placeholder="Quick verify — type an invoice number..."
-          style={{ flex: 1, minWidth: 280 }}
+          placeholder="Invoice number..."
         />
         <button className="btn btn-primary" onClick={quickFind} disabled={quickSearching || !quickInvoice.trim()}>
           {quickSearching ? "Searching..." : "Find & verify"}
@@ -516,7 +515,18 @@ export default function ManagerReview({ role, privileges, token }) {
 
             <div style={{ marginTop: 20 }}>
               <div className="fl" style={{ marginBottom: 8 }}>Bank transaction verification</div>
-              <VerifyEtPanel
+              {drawerRow.extraction && (drawerRow.extraction.detectedBank || drawerRow.extraction.bankReferenceNumber || drawerRow.extraction.detectedPhoneNumber) && (
+                <div style={{ background: "var(--blue-bg)", border: "1px solid var(--blue)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--blue)", marginBottom: 8 }}>
+                    Detected for Verify.ET
+                  </div>
+                  <div className="field-grid" style={{ marginBottom: 0, gap: "8px 20px" }}>
+                    <div className="field"><div className="fl">Bank</div><div className="fv">{drawerRow.extraction.detectedBank || "—"}</div></div>
+                    <div className="field"><div className="fl">Reference #</div><div className="fv mono">{drawerRow.extraction.bankReferenceNumber || "—"}</div></div>
+                    <div className="field"><div className="fl">Phone</div><div className="fv mono">{drawerRow.extraction.detectedPhoneNumber || "—"}</div></div>
+                  </div>
+                </div>
+              )}              <VerifyEtPanel
                 payment={drawerRow}
                 token={token}
                 onUpdated={(data) => {
@@ -544,18 +554,6 @@ export default function ManagerReview({ role, privileges, token }) {
 
                 {drawerRow.extraction ? (
                   <div className="card" style={{ background: "var(--paper)", padding: 16 }}>
-                    {drawerRow.extraction && (drawerRow.extraction.detectedBank || drawerRow.extraction.bankReferenceNumber || drawerRow.extraction.detectedPhoneNumber) && (
-                      <div style={{ background: "var(--blue-bg)", border: "1px solid var(--blue)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--blue)", marginBottom: 8 }}>
-                          Detected for Verify.ET
-                        </div>
-                        <div className="field-grid" style={{ marginBottom: 0, gap: "8px 20px" }}>
-                          <div className="field"><div className="fl">Bank</div><div className="fv">{drawerRow.extraction.detectedBank || "—"}</div></div>
-                          <div className="field"><div className="fl">Reference #</div><div className="fv mono">{drawerRow.extraction.bankReferenceNumber || "—"}</div></div>
-                          <div className="field"><div className="fl">Phone</div><div className="fv mono">{drawerRow.extraction.detectedPhoneNumber || "—"}</div></div>
-                        </div>
-                      </div>
-                    )}
                     <div className="field-grid" style={{ marginBottom: 0, gap: "10px 20px" }}>
                       <div className="field"><div className="fl">TIN</div><div className="fv mono">{drawerRow.extraction.tin || "—"}</div></div>
                       <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{drawerRow.extraction.receiptNumber || "—"}</div></div>

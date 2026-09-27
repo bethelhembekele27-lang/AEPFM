@@ -490,6 +490,10 @@ class VerifyEtCheck(models.Model):
     receiverName = models.CharField(max_length=255, blank=True, default='')
     receiverAccount = models.CharField(max_length=100, blank=True, default='')
     settlementMatched = models.BooleanField(null=True, blank=True)
+    possibleDuplicate = models.BooleanField(
+        default=False,
+        help_text="True if this bank+referenceNumber combination was already verified and approved against a different payment — a real transaction reference reused across invoices.",
+    )
     rawResponse = models.JSONField(default=dict, blank=True)
     errorMessage = models.TextField(blank=True, default='')
     checkedAt = models.DateTimeField(auto_now_add=True)

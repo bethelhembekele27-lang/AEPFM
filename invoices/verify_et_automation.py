@@ -31,6 +31,37 @@ def _amounts_match(verify_amount, invoice_amount):
         return False
 
 
+def is_possible_duplicate_reference(bank, reference, exclude_payment_id=None):
+    """
+    True if this exact bank+referenceNumber has already been verified AND
+    approved against a DIFFERENT payment.
+
+    Verify.ET's `verified: true` only confirms a real transaction with that
+    reference exists somewhere — it says nothing about which invoice it was
+    for. So without this, a bidder could resubmit a genuine reference from a
+    past, already-settled auction of their own against an unrelated new
+    invoice, and the amount would often match too. A real reference should
+    only ever justify one invoice being marked paid.
+
+    Known limitation: only compares against already-APPROVED payments. Two
+    receipts with the same reference sitting unreviewed at the same time
+    won't be caught, because neither is approved yet. Tightening this to
+    consider pending payments as well is a deliberate future change — it
+    would also flag a legitimate case where a bidder resubmits a receipt
+    after a rejection.
+    """
+    if not bank or not reference:
+        return False
+    from .models import VerifyEtCheck
+    qs = VerifyEtCheck.objects.filter(
+        bank=bank, referenceNumber=reference, verified=True,
+        payment__verificationStatus='manager_approved',
+    )
+    if exclude_payment_id:
+        qs = qs.exclude(payment_id=exclude_payment_id)
+    return qs.exists()
+
+
 def process_new_receipt(payment):
     """
     Called once, right after a bidder submits a receipt.
@@ -64,6 +95,10 @@ def process_new_receipt(payment):
     if result.get('processingStatus') != 'completed':
         return  # still queued — a human can re-check later, don't guess
 
+    duplicate = is_possible_duplicate_reference(
+        result.get('bank', bank or ''), reference, exclude_payment_id=payment.id,
+    )
+
     VerifyEtCheck.objects.update_or_create(
         payment=payment,
         defaults={
@@ -80,11 +115,24 @@ def process_new_receipt(payment):
             'receiverName': result.get('receiverName', ''),
             'receiverAccount': result.get('receiverAccount', ''),
             'settlementMatched': result.get('settlementMatched'),
+            'possibleDuplicate': duplicate,
             'rawResponse': result.get('rawResponse', {}),
             'errorMessage': '',
             'checkedBy': None,  # system action, not a human reviewer
         },
     )
+
+    if duplicate:
+        # Never auto-approve OR auto-reject a reused reference: a real
+        # transaction matching a reused reference can look perfectly valid to
+        # Verify.ET while actually belonging to a different invoice. A human
+        # has to decide. The check row is already saved above with the flag,
+        # so the reviewer sees the warning in the queue.
+        logger.warning(
+            "Auto-verify: payment #%s reuses a reference already approved on another payment — leaving for manual review",
+            payment.id,
+        )
+        return
 
     verified = result.get('verified')
     settlement_matched = result.get('settlementMatched')

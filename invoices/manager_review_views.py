@@ -240,6 +240,14 @@ class VerifyEtCheckView(APIView):
             return Response({'error': error}, status=http_status.HTTP_502_BAD_GATEWAY)
 
         from .models import VerifyEtCheck
+        from .verify_et_automation import is_possible_duplicate_reference
+
+        # Same duplicate check the automation uses, so a reviewer running a
+        # manual check sees the reuse warning immediately instead of
+        # discovering it after the fact.
+        duplicate = is_possible_duplicate_reference(
+            result['bank'], reference, exclude_payment_id=payment.id,
+        )
         check, _ = VerifyEtCheck.objects.update_or_create(
             payment=payment,
             defaults={
@@ -256,6 +264,7 @@ class VerifyEtCheckView(APIView):
                 'receiverName': result['receiverName'],
                 'receiverAccount': result['receiverAccount'],
                 'settlementMatched': result['settlementMatched'],
+                'possibleDuplicate': duplicate,
                 'rawResponse': result['rawResponse'],
                 'errorMessage': result['errorMessage'],
                 'checkedBy': request.user,

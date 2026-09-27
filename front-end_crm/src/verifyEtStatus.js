@@ -14,6 +14,9 @@ export function verifyEtStatus(check, amountPaid) {
   if (check.processingStatus !== "completed") {
     return { label: "Checking…", color: "under_verification" };
   }
+  if (check.possibleDuplicate) {
+    return { label: "Duplicate reference", color: "cancelled" };
+  }
   if (check.settlementMatched === false) {
     return { label: "Wrong account", color: "cancelled" };
   }

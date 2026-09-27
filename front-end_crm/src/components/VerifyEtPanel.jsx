@@ -121,8 +121,12 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
                 Verify.ET's amount ({check.amount}) doesn't match the recorded payment ({payment.amountPaid}). Informational only.
               </div>
             )}
-            {settlementFailed && (
+            {check.possibleDuplicate && (
               <div style={{ background: "var(--red-bg)", color: "var(--red)", borderRadius: 8, padding: "12px 14px", marginTop: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--red)" }}>
+                ⚠ This exact reference number was already used and approved on a different invoice. Do not approve without investigating — this may be a reused or reissued transaction.
+              </div>
+            )}
+            {settlementFailed && (              <div style={{ background: "var(--red-bg)", color: "var(--red)", borderRadius: 8, padding: "12px 14px", marginTop: 10, fontSize: 13, fontWeight: 600, border: "1px solid var(--red)" }}>
                 ⚠ This transaction did NOT go to Auction Ethiopia's own account. Review carefully before approving.
               </div>
             )}
