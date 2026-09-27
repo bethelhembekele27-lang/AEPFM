@@ -33,6 +33,7 @@ const SparkleIcon = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill=
 const WarnIcon = () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>);
 
 import VerifyEtPanel, { ShieldIcon } from "../components/VerifyEtPanel";
+import { verifyEtStatus } from "../verifyEtStatus";
 
 function AutoVerifyToggle({ token }) {
   const [enabled, setEnabled] = useState(null);
@@ -124,22 +125,10 @@ function VerifyEtCell({ payment, onOpen }) {
   const check = payment.verifyEtCheck;
   const open = (e) => { e.stopPropagation(); onOpen(payment); };
   if (!check) {
-    return (
-      <button className="btn btn-sm btn-icon-only" title="Verify with Verify.ET" onClick={open}>
-        <ShieldIcon />
-      </button>
-    );
+    return <button className="btn btn-sm btn-icon-only" title="Verify with Verify.ET" onClick={open}><ShieldIcon /></button>;
   }
-  if (check.processingStatus !== "completed") {
-    return <span className="stamp under_verification" style={{ cursor: "pointer" }} onClick={open}>Checking…</span>;
-  }
-  const color = check.settlementMatched === false ? "cancelled" : check.verified ? "paid" : "cancelled";
-  const label = check.settlementMatched === false ? "Wrong account" : check.verified ? "Verified" : "Not verified";
-  return (
-    <span className={`stamp ${color}`} style={{ cursor: "pointer" }} title="Click to view or re-check" onClick={open}>
-      {label}
-    </span>
-  );
+  const { label, color } = verifyEtStatus(check, payment.amountPaid);
+  return <span className={`stamp ${color}`} style={{ cursor: "pointer" }} title="Click to view or re-check" onClick={open}>{label}</span>;
 }
 
 function ConfidenceBadge({ level }) {
@@ -333,11 +322,11 @@ export default function ManagerReview({ role, privileges, token }) {
 
       <div className="filters" style={{ marginBottom: 16 }}>
         <input
-          className="grow"
           value={quickInvoice}
           onChange={(e) => setQuickInvoice(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") quickFind(); }}
           placeholder="Quick verify — type an invoice number..."
+          style={{ flex: 1, minWidth: 280 }}
         />
         <button className="btn btn-primary" onClick={quickFind} disabled={quickSearching || !quickInvoice.trim()}>
           {quickSearching ? "Searching..." : "Find & verify"}
@@ -518,6 +507,7 @@ export default function ManagerReview({ role, privileges, token }) {
             </div>
 
             <div style={{ marginTop: 20 }}>
+              <div className="fl" style={{ marginBottom: 8 }}>Bank transaction verification</div>
               <VerifyEtPanel
                 payment={drawerRow}
                 token={token}

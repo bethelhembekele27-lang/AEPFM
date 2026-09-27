@@ -389,7 +389,7 @@ export default function PublicInvoice({ token }) {
                   )}
                   {["cbe", "boa"].includes(bidderBank) && (
                     <div className="field" style={{ marginBottom: 10 }}>
-                      <div className="fl">Your account suffix (last 4 digits of your account number)</div>
+                      <div className="fl">Your account number's last 8 digits <span style={{ fontWeight: 400, color: "var(--text-3)" }}>(your own account — the receipt only shows the last 4)</span></div>
                       <input value={bidderAccountSuffix} onChange={(e) => setBidderAccountSuffix(e.target.value)} />
                     </div>
                   )}

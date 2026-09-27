@@ -18,6 +18,7 @@ Extract the following fields as JSON only, no other text:
   "receiptNumber": "the receipt or invoice number",
   "bankReferenceNumber": "the bank transfer or transaction reference number, if any — different from the receipt/invoice number, look for something labeled reference, transaction ID, or FT number; null if not present or this isn't a bank-transfer receipt",
   "detectedBank": "if this is a bank/wallet transfer receipt, your best guess at which of these it is: cbe, telebirr, boa, dashen, awash, cbebirr, mpesa, siinqee, kaafiebirr. null if unclear or not a bank transfer receipt at all.",
+  "detectedPhoneNumber": "if this is a Telebirr/CBE Birr receipt showing the sender's phone number, extract it; null otherwise",
   "extractedDate": "the date exactly as printed, including which calendar if stated",
   "customerName": "the name of the person/company the receipt was issued to",
   "totalAmount": "the final total amount as a plain number, no currency symbol or commas",
@@ -63,6 +64,7 @@ def run_and_save_extraction(payment, user):
     """
     import mimetypes
     from .models import ReceiptExtraction
+    from .sms import normalize_phone
 
     if not payment.receiptFile:
         return None, 'This payment has no receipt file.'
@@ -89,6 +91,7 @@ def run_and_save_extraction(payment, user):
             'receiptNumber': data.get('receiptNumber') or '',
             'bankReferenceNumber': data.get('bankReferenceNumber') or '',
             'detectedBank': (data.get('detectedBank') or '').strip().lower(),
+            'detectedPhoneNumber': normalize_phone(data.get('detectedPhoneNumber') or '') or '',
             'extractedDate': data.get('extractedDate') or '',
             'convertedGregorianDate': converted,
             'customerName': data.get('customerName') or '',

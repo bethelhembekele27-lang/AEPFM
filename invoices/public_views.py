@@ -230,14 +230,15 @@ class PublicReceiptUploadView(APIView):
                 action_type='upload_payment',
             )
 
-        # Best-effort automatic Verify.ET check — never lets a failure here
-        # affect the bidder's response. Fully inert unless an admin has
-        # turned automation on. Note this is synchronous: when automation is
-        # enabled the upload response waits on a Verify.ET call (and possibly
-        # a Gemini extraction), so this endpoint gets correspondingly slower.
+        # Best-effort: always extracts the bank reference for the reviewer's
+        # benefit; only auto-approves/rejects when an admin has turned
+        # automation on. A failure here never affects the bidder's response.
+        # Note this is synchronous: when automation is enabled the upload
+        # response waits on a Verify.ET call (and possibly a Gemini
+        # extraction), so this endpoint gets correspondingly slower.
         try:
-            from .verify_et_automation import maybe_auto_verify
-            maybe_auto_verify(payment)
+            from .verify_et_automation import process_new_receipt
+            process_new_receipt(payment)
         except Exception:
             logger.exception('Auto-verify failed (non-fatal)')
 

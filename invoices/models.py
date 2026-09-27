@@ -446,6 +446,10 @@ class ReceiptExtraction(models.Model):
         max_length=30, blank=True, default='',
         help_text="AI's best guess at the Verify.ET bank code (cbe, telebirr, boa, ...), or blank if unclear.",
     )
+    detectedPhoneNumber = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text="Sender phone number seen on a Telebirr/CBE Birr receipt, used for wallet verification. Blank if not shown.",
+    )
     convertedGregorianDate = models.CharField(max_length=20, blank=True, default='', help_text="Best-effort Ethiopian->Gregorian conversion of extractedDate, ISO format. Empty if extractedDate wasn't a parseable, plausible dd/mm/yy(yy) Ethiopian date.")
     customerName = models.CharField(max_length=255, blank=True, default='')
     totalAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)

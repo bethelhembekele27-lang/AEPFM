@@ -31,22 +31,28 @@ def _amounts_match(verify_amount, invoice_amount):
         return False
 
 
-def maybe_auto_verify(payment):
+def process_new_receipt(payment):
     """
-    Called once, right after a bidder submits a receipt. Best-effort:
-    - Runs AI extraction to find a reference number + likely bank (if
-      GEMINI_API_KEY is set).
-    - If a reference was found, checks it with Verify.ET.
-    - Auto-approves or auto-rejects ONLY on an unambiguous result.
-    Returns nothing; all outcomes are visible via the normal Payment/
-    VerifyEtCheck/AuditLog rows, never returned to the bidder directly.
+    Called once, right after a bidder submits a receipt.
+
+    Always attempts best-effort AI extraction of the bank reference and
+    bank, so the manual reviewer gets a pre-filled reference whether or not
+    automation is switched on. Extraction must NOT be gated on the toggle —
+    it is a reviewer convenience, not an automated action.
+
+    Only proceeds to an automatic Verify.ET check and an approve/reject
+    decision when automation is enabled AND an API key exists. Anything
+    uncertain is left for a human.
+
+    Returns nothing; all outcomes are visible via the normal Payment /
+    VerifyEtCheck / AuditLog rows, never returned to the bidder directly.
     """
+    reference, bank, suffix, phone = _get_or_extract_fields(payment)
+
     if not VerifyEtAutomationSettings.is_enabled():
         return
     if not settings.VERIFY_ET_API_KEY:
         return
-
-    reference, bank, suffix, phone = _get_or_extract_fields(payment)
     if not reference:
         return  # nothing to check — leave for manual review as usual
 
@@ -124,8 +130,9 @@ def _get_or_extract_fields(payment):
     return (
         extraction.bankReferenceNumber or '',
         extraction.detectedBank or '',
-        '',  # accountSuffix isn't reliably extractable yet — left blank on purpose
-        '',
+        '',  # accountSuffix isn't reliably extractable — masked on receipts,
+             # and the bidder-typed value above is the only trustworthy source
+        getattr(extraction, 'detectedPhoneNumber', '') or '',
     )
 
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiCall } from "../api";
+import { verifyEtStatus } from "../verifyEtStatus";
 
 const VERIFY_ET_BANKS = [
   { v: "", l: "Let Verify.ET detect it" },
@@ -47,6 +48,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
 
   const amountMismatch = check?.amount && Number(check.amount) !== Number(payment.amountPaid);
   const settlementFailed = check?.settlementMatched === false;
+  const status = verifyEtStatus(check, payment.amountPaid);
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
@@ -105,12 +107,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
           <div style={{ marginTop: 18 }}>
             <div className="section-label" style={{ margin: "0 0 10px" }}>Result</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span
-                className={`stamp ${check.settlementMatched === false ? "cancelled" : check.verified ? "paid" : "cancelled"}`}
-                style={{ fontSize: 12 }}
-              >
-                {check.settlementMatched === false ? "Wrong account" : check.verified ? "Verified" : "Not verified"}
-              </span>
+              <span className={`stamp ${status.color}`} style={{ fontSize: 12 }}>{status.label}</span>
               {check.amount && <span className="mono amount" style={{ fontSize: 13.5 }}>ETB {check.amount}</span>}
             </div>
             {check.verified && (
