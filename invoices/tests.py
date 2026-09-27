@@ -1,8 +1,15 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from unittest.mock import patch
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
+
+# Tests only — never settings.py, so production password hashing is untouched.
+# PBKDF2 costs ~2s per make_user on this machine and make_user runs several
+# times per test, which dominated the suite's runtime. MD5 is fast and
+# cryptographically irrelevant here: these hashes are discarded with the
+# test database and never authenticate a real login.
+FAST_PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 from invoices.models import (
     Role, StaffProfile, Winner, Invoice, InvoiceLot, AuditLog, Payment,
@@ -42,6 +49,7 @@ def make_invoice(status='pending_payment'):
     return invoice
 
 
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
 class PrivilegeGateTests(TestCase):
     """
     Hits each role against each privilege-gated endpoint and asserts who gets
@@ -182,6 +190,7 @@ class PrivilegeGateTests(TestCase):
         )
 
 
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
 class VerifyEtCheckTests(TestCase):
     """
     Exercises POST /api/receipts/<id>/verify-transaction/ itself.
@@ -333,6 +342,7 @@ class VerifyEtCheckTests(TestCase):
         self.assertIsNone(res.data['settlementMatched'])
 
 
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
 class StatusTransitionTests(TestCase):
     def test_locked_status_cannot_transition_for_non_admin(self):
         from invoices.permissions import can_transition
