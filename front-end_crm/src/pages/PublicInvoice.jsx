@@ -5,6 +5,7 @@ import logo from "../logo";
 
 const CLOSED_STATUSES = ["paid", "cancelled", "waived"];
 const MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024; // mirrors public_views.py MAX_RECEIPT_FILE_SIZE
+const MAX_RECEIPT_FILES = 3;
 const LANG_KEY = "publicInvoiceLang";
 
 // TODO: have a native Amharic speaker review every "am" string before real bidders see this.
@@ -63,6 +64,9 @@ const TEXT = {
     fileNotValid: "ፋይሉ ትክክለኛ አይደለም፣ እባክዎ ትክክለኛ PDF ወይም ግልጽ ፎቶ ይስቀሉ",
     imageNotClear: "ምስሉ ግልጽ አይደለም፣ እባክዎ ግልጽ ፎቶ አንስተው እንደገና ይስቀሉ",
     invoiceClosed: "ይህ ደረሰኝ ተዘግቷል፣ አዲስ ደረሰኝ መቀበል አይቻልም።",
+    tooManyFiles: "እስከ 3 ፋይሎች ብቻ መስቀል ይችላሉ።",
+    maxFiles: "ከፍተኛው 3 ፋይሎች ተመርጠዋል",
+    remove: "አስወግድ",
   },
   en: {
     loading: "Loading invoice…",
@@ -95,6 +99,9 @@ const TEXT = {
     fileNotValid: "This file is not valid. Please upload a valid PDF or a clear photo.",
     imageNotClear: "The image is not clear. Please take a clear photo and upload it again.",
     invoiceClosed: "This invoice is closed and cannot accept a new receipt.",
+    tooManyFiles: "You can upload up to 3 files.",
+    maxFiles: "Maximum of 3 files reached",
+    remove: "Remove",
   },
 };
 
@@ -106,6 +113,7 @@ const ERROR_KEYS = {
   image_not_clear: "imageNotClear",
   invoice_closed: "invoiceClosed",
   file_required: "attachFirst",
+  too_many_files: "tooManyFiles",
 };
 
 function isLikelyPdf(file) {
@@ -161,14 +169,7 @@ export default function PublicInvoice({ token }) {
   const [loading, setLoading] = useState(true);
   const [loadErrorKey, setLoadErrorKey] = useState("");
 
-  const [receiptFile, setReceiptFile] = useState(null);
-  // Optional bidder-supplied payment details. A bank receipt masks most of the
-  // account number (****5678), so for a CBE/BoA transfer the suffix simply is
-  // not in the image — the bidder is the only one who can supply it.
-  const [bidderBank, setBidderBank] = useState("");
-  const [bidderReferenceNumber, setBidderReferenceNumber] = useState("");
-  const [bidderAccountNumber, setBidderAccountNumber] = useState("");
-  const [bidderPhoneNumber, setBidderPhoneNumber] = useState("");
+  const [receiptFiles, setReceiptFiles] = useState([]);
   const [fileErrorKey, setFileErrorKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -212,42 +213,29 @@ export default function PublicInvoice({ token }) {
     }
   }
 
-  function handleFileChange(e) {
-    const file = e.target.files?.[0] || null;
-    setFileErrorKey("");
-    setSubmitErrorKey("");
-    if (!file) {
-      setReceiptFile(null);
-      return;
-    }
-    const errKey = validateFile(file);
-    if (errKey) {
-      setFileErrorKey(errKey);
-      setReceiptFile(null);
-      e.target.value = "";
-      return;
-    }
-    setReceiptFile(file);
+  function handleFilesChange(e) {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = "";
+    setFileErrorKey(""); setSubmitErrorKey("");
+    if (picked.length === 0) return;
+    if (receiptFiles.length + picked.length > MAX_RECEIPT_FILES) { setFileErrorKey("tooManyFiles"); return; }
+    for (const f of picked) { const k = validateFile(f); if (k) { setFileErrorKey(k); return; } }
+    setReceiptFiles((prev) => [...prev, ...picked]);
   }
+  function removeFile(i) { setReceiptFiles((prev) => prev.filter((_, idx) => idx !== i)); }
 
   async function handleSubmitReceipt(e) {
     e.preventDefault();
     setSubmitErrorKey("");
 
-    if (!receiptFile) {
+    if (receiptFiles.length === 0) {
       setSubmitErrorKey("attachFirst");
       return;
     }
 
     setSubmitting(true);
     const formData = new FormData();
-    formData.append("receiptFile", receiptFile);
-    if (bidderBank) formData.append("bidderBank", bidderBank);
-    if (bidderReferenceNumber.trim()) formData.append("bidderReferenceNumber", bidderReferenceNumber.trim());
-    if (bidderAccountNumber.trim()) formData.append("bidderAccountNumber", bidderAccountNumber.trim());
-    if (bidderPhoneNumber.trim()) formData.append("bidderPhoneNumber", bidderPhoneNumber.trim());
-    // amountPaid / paymentMethod / paymentDate are deliberately NOT sent -
-    // the backend defaults these server-side (see public_views.py).
+    receiptFiles.forEach((f) => formData.append("receiptFiles", f));
 
     try {
       const res = await apiCall(`/api/public/invoice/${token}/receipt/`, {
@@ -369,55 +357,19 @@ export default function PublicInvoice({ token }) {
                 <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{t.uploadTitle}</h3>
                 <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 14 }}>{t.uploadHelp}</div>
                 <form onSubmit={handleSubmitReceipt}>
-                  <div className="field" style={{ marginBottom: 10 }}>
-                    <div className="fl">How did you pay? <span style={{ fontWeight: 400, color: "var(--text-3)" }}>(optional, speeds up verification)</span></div>
-                    <select value={bidderBank} onChange={(e) => setBidderBank(e.target.value)}>
-                      <option value="">Not sure / other</option>
-                      <option value="cbe">CBE</option>
-                      <option value="telebirr">Telebirr</option>
-                      <option value="boa">Bank of Abyssinia</option>
-                      <option value="dashen">Dashen Bank</option>
-                      <option value="awash">Awash Bank</option>
-                      <option value="cbebirr">CBE Birr</option>
-                    </select>
+                  <div className="filedrop" onClick={() => document.getElementById("public-receipt-input")?.click()} style={{ cursor: "pointer", marginBottom: 10 }}>
+                    {receiptFiles.length < MAX_RECEIPT_FILES ? t.chooseFile : t.maxFiles}
+                    <input id="public-receipt-input" type="file" multiple accept="image/*,application/pdf" onChange={handleFilesChange} style={{ display: "none" }} />
                   </div>
-                  {bidderBank && (
-                    <div className="field" style={{ marginBottom: 10 }}>
-                      <div className="fl">Transaction / reference number</div>
-                      <input value={bidderReferenceNumber} onChange={(e) => setBidderReferenceNumber(e.target.value)} />
+                  {receiptFiles.map((f, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6 }}>
+                      <span>{f.name}</span>
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => removeFile(i)}>{t.remove}</button>
                     </div>
-                  )}
-                  {["cbe", "boa"].includes(bidderBank) && (
-                    <div className="field" style={{ marginBottom: 10 }}>
-                      <div className="fl">Your bank account number (the one you sent from)</div>
-                      <input value={bidderAccountNumber} onChange={(e) => setBidderAccountNumber(e.target.value)} inputMode="numeric" />
-                    </div>
-                  )}
-                  {bidderBank === "cbebirr" && (
-                    <div className="field" style={{ marginBottom: 10 }}>
-                      <div className="fl">Phone number used for the payment</div>
-                      <input value={bidderPhoneNumber} onChange={(e) => setBidderPhoneNumber(e.target.value)} placeholder="0911234567" />
-                    </div>
-                  )}
-                  <div
-                    className="filedrop"
-                    onClick={() => document.getElementById("public-receipt-input")?.click()}
-                    style={{ cursor: "pointer", marginBottom: 10 }}
-                  >
-                    {receiptFile ? receiptFile.name : t.chooseFile}
-                    <input
-                      id="public-receipt-input"
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={handleFileChange}
-                      style={{ display: "none" }}
-                    />
-                  </div>
-
+                  ))}
                   {fileErrorKey && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 12.5 }}>{t[fileErrorKey]}</div>}
                   {submitErrorKey && <div style={{ color: "var(--red)", marginBottom: 10, fontSize: 12.5 }}>{t[submitErrorKey]}</div>}
-
-                  <button type="submit" className="btn btn-brass" style={{ width: "100%" }} disabled={submitting || !receiptFile}>
+                  <button type="submit" className="btn btn-brass" style={{ width: "100%" }} disabled={submitting || receiptFiles.length === 0}>
                     {submitting ? t.sending : t.send}
                   </button>
                 </form>

@@ -17,7 +17,7 @@ Extract the following fields as JSON only, no other text:
   "tin": "the TIN number of the issuing company/bank, if visible",
   "receiptNumber": "the receipt or invoice number",
   "bankReferenceNumber": "the bank transfer or transaction reference number, if any — different from the receipt/invoice number, look for something labeled reference, transaction ID, or FT number; null if not present or this isn't a bank-transfer receipt",
-  "detectedBank": "if this is a bank/wallet transfer receipt, your best guess at which of these it is: cbe, telebirr, boa, dashen, awash, cbebirr, mpesa, siinqee, kaafiebirr. null if unclear or not a bank transfer receipt at all.",
+  "detectedBank": "cbe if this is a Commercial Bank of Ethiopia transfer receipt, other if it is another bank or wallet, null if not a bank transfer receipt",
   "detectedPhoneNumber": "if this is a Telebirr/CBE Birr receipt showing the sender's phone number, extract it; null otherwise",
   "extractedDate": "the date exactly as printed, including which calendar if stated",
   "customerName": "the name of the person/company the receipt was issued to",
@@ -37,10 +37,7 @@ def extract_receipt_data(image_bytes, mime_type):
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-3.8-flash')
-        response = model.generate_content([
-            EXTRACTION_PROMPT,
-            {'mime_type': mime_type, 'data': image_bytes},
-        ])
+        response = model.generate_content([EXTRACTION_PROMPT, {'mime_type': mime_type, 'data': image_bytes}], request_options={'timeout': 20})
         text = response.text.strip()
         if text.startswith('```'):
             text = text.strip('`').removeprefix('json').strip()
@@ -52,6 +49,11 @@ def extract_receipt_data(image_bytes, mime_type):
     except Exception as e:
         logger.exception('Gemini extraction failed')
         return None, f'Extraction failed: {e}', {}
+
+
+def _receipt_files(payment):
+    files = [payment.receiptFile] if payment.receiptFile else []
+    return files + [rf.file for rf in payment.receipt_files.all()]
 
 
 def run_and_save_extraction(payment, user):
@@ -69,14 +71,23 @@ def run_and_save_extraction(payment, user):
     if not payment.receiptFile:
         return None, 'This payment has no receipt file.'
 
-    payment.receiptFile.open('rb')
-    image_bytes = payment.receiptFile.read()
-    payment.receiptFile.close()
-    mime_type = mimetypes.guess_type(payment.receiptFile.name)[0] or 'image/jpeg'
-
-    data, error, raw = extract_receipt_data(image_bytes, mime_type)
-    if error:
-        return None, error
+    best, last_error = None, None
+    for f in _receipt_files(payment):
+        try:
+            f.open('rb'); image_bytes = f.read(); f.close()
+        except Exception as exc:
+            last_error = f'Could not read receipt file: {exc}'; continue
+        mime_type = mimetypes.guess_type(f.name)[0] or 'image/jpeg'
+        data, error, raw = extract_receipt_data(image_bytes, mime_type)
+        if error:
+            last_error = error; continue
+        if best is None:
+            best = (data, raw)
+        if data.get('bankReferenceNumber'):
+            best = (data, raw); break
+    if best is None:
+        return None, last_error or 'This payment has no receipt file.'
+    data, raw = best
 
     def to_decimal(v):
         return None if v in (None, '') else v

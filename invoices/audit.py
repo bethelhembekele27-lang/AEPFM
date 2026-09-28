@@ -1,5 +1,5 @@
 
-from .models import AuditLog
+from .models import AuditLog, SystemAuditLog
 
 
 def log_audit(invoice, action_label, user, previous_value='', new_value='', reason='', action_type='other'):
@@ -18,4 +18,13 @@ def log_audit(invoice, action_label, user, previous_value='', new_value='', reas
         previousValue=str(previous_value),
         newValue=str(new_value),
         reason=reason,
+    )
+
+
+def log_system_audit(user, action, target='', details=''):
+    SystemAuditLog.objects.create(
+        action=action,
+        performedBy=user if user and user.is_authenticated else None,
+        performedByName=(user.get_username() if user and user.is_authenticated else ''),
+        target=target, details=details,
     )

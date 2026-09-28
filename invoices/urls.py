@@ -7,7 +7,7 @@ from .views import (
     OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
     VerifyEtAutomationSettingsView,
 )
-from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView
+from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView, VerifyEtRefreshView
 
 from .import_views import (
     ImportBatchViewSet, ImportBatchPreviewView, ImportBatchConfirmView,
@@ -40,6 +40,7 @@ urlpatterns = [
     path('receipts/<int:payment_id>/review/', ReceiptReviewView.as_view(), name='receipt-review'),
     path('receipts/<int:payment_id>/extract/', ReceiptExtractView.as_view(), name='receipt-extract'),
     path('receipts/<int:payment_id>/verify-transaction/', VerifyEtCheckView.as_view(), name='receipt-verify-transaction'),
+    path('receipts/<int:payment_id>/verify-transaction/refresh/', VerifyEtRefreshView.as_view(), name='receipt-verify-refresh'),
 
     path('', include(router.urls)),
 ]

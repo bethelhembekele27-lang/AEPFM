@@ -346,6 +346,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if not has_permission(request.user, 'upload_payment_proof'):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
+        from .upload_validation import validate_staff_upload
+        err = validate_staff_upload(request.FILES.get('filePath'))
+        if err:
+            return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)
+
         data = request.data.copy()
         data['invoice'] = invoice.id
         serializer = AttachmentSerializer(data=data)

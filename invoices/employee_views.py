@@ -11,6 +11,7 @@ from .models import StaffProfile, Role
 from .serializers import EmployeeSerializer, RoleSerializer
 from .permissions import has_permission
 from .privileges import PRIVILEGE_CATALOG, PRIVILEGE_KEYS
+from .audit import log_system_audit
 
 
 def _clean_email(raw, exclude_user_id=None):
@@ -60,6 +61,7 @@ class RoleListCreateView(APIView):
             return Response({'error': f'Unknown privilege keys: {invalid}'}, status=http_status.HTTP_400_BAD_REQUEST)
 
         role = Role.objects.create(name=name, defaultPrivileges=privileges, isBuiltIn=False)
+        log_system_audit(request.user, 'Create role', name)
         return Response(RoleSerializer(role).data, status=http_status.HTTP_201_CREATED)
 
 
@@ -106,6 +108,7 @@ class EmployeeListCreateView(APIView):
             user=user, role=role, privileges=final_privileges,
             isActive=True, lastPasswordChange=timezone.now(),
         )
+        log_system_audit(request.user, 'Create employee', user.username, f'role={role.name}')
         return Response(EmployeeSerializer(profile).data, status=http_status.HTTP_201_CREATED)
 
 
@@ -127,8 +130,10 @@ class EmployeePrivilegesView(APIView):
         if invalid:
             return Response({'error': f'Unknown privilege keys: {invalid}'}, status=http_status.HTTP_400_BAD_REQUEST)
 
+        old = set(profile.privileges)
         profile.privileges = privileges
         profile.save(update_fields=['privileges'])
+        log_system_audit(request.user, 'Edit privileges', profile.user.username, f'+{sorted(set(privileges)-old)} -{sorted(old-set(privileges))}')
         return Response(EmployeeSerializer(profile).data)
 
 
@@ -147,6 +152,7 @@ class EmployeeDeactivateView(APIView):
         profile.save(update_fields=['isActive'])
         profile.user.is_active = profile.isActive
         profile.user.save(update_fields=['is_active'])
+        log_system_audit(request.user, 'Activate' if profile.isActive else 'Deactivate', profile.user.username)
         return Response(EmployeeSerializer(profile).data)
 
 class EmployeeBulkDeactivateView(APIView):
@@ -160,6 +166,7 @@ class EmployeeBulkDeactivateView(APIView):
         profiles = StaffProfile.objects.filter(id__in=ids)
         if profiles.filter(user_id=request.user.id).exists():
             return Response({'error': "You can't deactivate your own account."}, status=http_status.HTTP_400_BAD_REQUEST)
+        usernames = list(profiles.values_list('user__username', flat=True))
         n = 0
         for profile in profiles:
             profile.isActive = False
@@ -167,6 +174,7 @@ class EmployeeBulkDeactivateView(APIView):
             profile.user.is_active = False
             profile.user.save(update_fields=['is_active'])
             n += 1
+        log_system_audit(request.user, 'Bulk deactivate', '', ', '.join(usernames))
         return Response({'deactivated': n})
 
 class EmployeeBulkActivateView(APIView):
@@ -178,6 +186,7 @@ class EmployeeBulkActivateView(APIView):
             return Response({'error': 'Only administrators can activate employees.'}, status=http_status.HTTP_403_FORBIDDEN)
         ids = request.data.get('employeeIds', [])
         profiles = StaffProfile.objects.filter(id__in=ids)
+        usernames = list(profiles.values_list('user__username', flat=True))
         n = 0
         for profile in profiles:
             profile.isActive = True
@@ -185,6 +194,7 @@ class EmployeeBulkActivateView(APIView):
             profile.user.is_active = True
             profile.user.save(update_fields=['is_active'])
             n += 1
+        log_system_audit(request.user, 'Bulk activate', '', ', '.join(usernames))
         return Response({'activated': n})
 class EmployeeBulkDeleteView(APIView):
     """POST /api/employees/bulk-delete/ — {employeeIds: [...]}. Hard-deletes the User row
@@ -199,8 +209,10 @@ class EmployeeBulkDeleteView(APIView):
         user_ids = list(profiles.values_list('user_id', flat=True))
         if request.user.id in user_ids:
             return Response({'error': "You can't delete your own account."}, status=http_status.HTTP_400_BAD_REQUEST)
+        usernames = list(profiles.values_list('user__username', flat=True))
         count = len(user_ids)
         User.objects.filter(id__in=user_ids).delete()
+        log_system_audit(request.user, 'Bulk delete', '', ', '.join(usernames))
         return Response({'deleted': count})
 
 
@@ -226,6 +238,7 @@ class EmployeeResetPasswordView(APIView):
         profile.lastPasswordChangedBy = request.user
         profile.lastPasswordChange = timezone.now()
         profile.save(update_fields=['lastPasswordChangedBy', 'lastPasswordChange'])
+        log_system_audit(request.user, 'Reset password', profile.user.username)
         return Response(EmployeeSerializer(profile).data)
 
 
@@ -245,6 +258,7 @@ class EmployeeEmailView(APIView):
             return Response({'error': err}, status=http_status.HTTP_400_BAD_REQUEST)
         profile.user.email = email
         profile.user.save(update_fields=['email'])
+        log_system_audit(request.user, 'Change email', profile.user.username)
         return Response(EmployeeSerializer(profile).data)
 
 
@@ -269,7 +283,9 @@ class RoleDeleteView(APIView):
                 {'error': f'{in_use} employee(s) still use this role. Reassign them to a different role first.'},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
+        name = role.name
         role.delete()
+        log_system_audit(request.user, 'Delete role', name)
         return Response({'success': True})
 
 
@@ -326,4 +342,5 @@ class AccountChangePasswordView(APIView):
             user.profile.lastPasswordChange = timezone.now()
             user.profile.save(update_fields=['lastPasswordChangedBy', 'lastPasswordChange'])
 
+        log_system_audit(user, 'Change own password', user.username)
         return Response({'success': True})

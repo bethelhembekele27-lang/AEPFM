@@ -14,6 +14,7 @@ PRIVILEGE_CATALOG = [
     {'key': 'manage_call_center', 'label': 'Manage CRM / call center inquiries', 'category': 'CRM'},
     {'key': 'view_call_center_dashboard', 'label': 'View call center payment dashboard', 'category': 'CRM'},
     {'key': 'manage_users', 'label': 'Manage employee accounts & privileges', 'category': 'Administration'},
+    {'key': 'manage_fee_config', 'label': 'Manage system settings (fee %, office address, auto-verify)', 'category': 'Administration'},
 
     # Phase 1: reviewing bidder-submitted receipts (public-link uploads)
     # for legitimacy, before Finance ever sees them. Deliberately separate

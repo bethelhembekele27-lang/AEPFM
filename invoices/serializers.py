@@ -465,6 +465,8 @@ class ManagerPaymentSerializer(PaymentSerializer):
     PaymentSerializer never leaks receiptFile to Viewer or Finance roles.
     """
     receiptUrl = serializers.SerializerMethodField()
+    receiptUrls = serializers.SerializerMethodField()
+    amountDue = serializers.SerializerMethodField()
     invoiceNumber = serializers.CharField(source='invoice.invoiceNumber', read_only=True)
     bidderName = serializers.CharField(source='invoice.winner.bidderName', read_only=True)
     winnerPhone = serializers.CharField(source='invoice.winner.winnerPhone', read_only=True)
@@ -473,6 +475,10 @@ class ManagerPaymentSerializer(PaymentSerializer):
     class Meta(PaymentSerializer.Meta):
         fields = PaymentSerializer.Meta.fields + [
             'receiptUrl',
+            'receiptUrls',
+            'amountDue',
+            'amountDiscrepancy',
+            'amountDiscrepancyAmount',
             'invoiceNumber',
             'bidderName',
             'winnerPhone',
@@ -483,10 +489,6 @@ class ManagerPaymentSerializer(PaymentSerializer):
             'submittedViaPublicLink',
             'extraction',
             'verifyEtCheck',
-            'bidderBank',
-            'bidderReferenceNumber',
-            'bidderAccountSuffix',
-            'bidderPhoneNumber',
         ]
 
     extraction = serializers.SerializerMethodField()
@@ -511,6 +513,17 @@ class ManagerPaymentSerializer(PaymentSerializer):
         if request is not None:
             return request.build_absolute_uri(obj.receiptFile.url)
         return obj.receiptFile.url
+
+    def get_receiptUrls(self, obj):
+        request = self.context.get('request')
+        def absolute(f):
+            return request.build_absolute_uri(f.url) if request is not None else f.url
+        urls = [absolute(obj.receiptFile)] if obj.receiptFile else []
+        return urls + [absolute(x.file) for x in obj.receipt_files.all()]
+
+    def get_amountDue(self, obj):
+        from .payment_amounts import remaining_due
+        return str(remaining_due(obj.invoice, exclude_payment_id=obj.id))
 
     def get_managerVerifiedBy(self, obj):
         return user_display_name(obj.managerVerifiedBy)

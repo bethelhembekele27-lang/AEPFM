@@ -326,9 +326,21 @@ class Payment(models.Model):
         help_text="Last 8 digits of the bidder's account, computed server-side from the full account number they typed — never typed directly by the bidder.",
     )
     bidderPhoneNumber = models.CharField(max_length=20, blank=True, default='')
+    amountDiscrepancy = models.CharField(
+        max_length=12, blank=True, default='',
+        choices=[('underpaid', 'Underpaid'), ('overpaid', 'Overpaid')],
+    )
+    amountDiscrepancyAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return f"{self.amountPaid} on {self.invoice.invoiceNumber}"
+
+
+class PaymentReceiptFile(models.Model):
+    """Extra receipt images (2nd and 3rd). The first image stays on Payment.receiptFile."""
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='receipt_files')
+    file = models.FileField(upload_to=receipt_upload_path)
+    uploadedAt = models.DateTimeField(auto_now_add=True)
 
 
 class Attachment(models.Model):
@@ -390,6 +402,19 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.invoice.invoiceNumber}: {self.action}"
+
+
+class SystemAuditLog(models.Model):
+    """Admin actions that aren't tied to an invoice (employee/role management)."""
+    action = models.CharField(max_length=100)
+    performedBy = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    performedByName = models.CharField(max_length=150, blank=True, default='')
+    target = models.CharField(max_length=200, blank=True, default='')
+    details = models.TextField(blank=True, default='')
+    createdAt = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-createdAt']
 
 
 class SmsLog(models.Model):

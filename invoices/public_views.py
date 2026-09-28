@@ -1,7 +1,5 @@
-from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import logging
-import re
 
 from django.shortcuts import get_object_or_404
 from django.http import FileResponse
@@ -15,10 +13,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework import status as http_status
 
-from .models import Invoice, Payment
+from .models import Invoice, Payment, PaymentReceiptFile
 from .serializers import PublicInvoiceSerializer
 from .audit import log_audit
 from .pdf_rendering import load_invoice_images, render_invoice_html
+from .payment_amounts import amount_due
+from .verify_et_automation import dispatch_receipt_processing
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,13 @@ MIN_RECEIPT_FILE_SIZE = 20_000
 MIN_PDF_SIZE = 5_000
 MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024
 MIN_RECEIPT_DIMENSION = 300
+MAX_RECEIPT_FILES = 3
 
 ERROR_CODES = {
     IMAGE_NOT_CLEAR_MESSAGE: 'image_not_clear',
     FILE_NOT_VALID_MESSAGE: 'file_not_valid',
     FILE_TOO_LARGE_MESSAGE: 'file_too_large',
+    'TOO_MANY': 'too_many_files',
 }
 
 
@@ -180,52 +182,28 @@ class PublicReceiptUploadView(APIView):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
-        receipt_file = request.FILES.get('receiptFile')
-        if not receipt_file:
-            return Response(
-                {'error': 'This field is required.', 'code': 'file_required'},
-                status=http_status.HTTP_400_BAD_REQUEST,
-            )
-
-        image_error = _validate_receipt_file(receipt_file)
-        if image_error:
-            return Response(
-                {'error': image_error, 'code': ERROR_CODES.get(image_error, 'file_not_valid')},
-                status=http_status.HTTP_400_BAD_REQUEST,
-            )
-
-        # amountPaid / paymentMethod / paymentDate are no longer collected
-        # from the bidder — defaulted here instead.
-        amount_paid = request.data.get('amountPaid') or invoice.totalAmount
-        payment_method = request.data.get('paymentMethod') or 'unspecified'
-        payment_date = request.data.get('paymentDate') or timezone.localdate()
-
-        try:
-            amount_paid = Decimal(str(amount_paid))
-        except InvalidOperation:
-            amount_paid = invoice.totalAmount
-
-        # The bidder types their whole account number; we derive the 8-digit
-        # suffix Verify.ET wants. Asking them to count out the last 8 digits
-        # themselves just invites typos in a field that gates auto-approval.
-        raw_account = (request.data.get('bidderAccountNumber') or '').strip()
-        account_digits = re.sub(r'\D', '', raw_account)
-        bidder_account_suffix = account_digits[-8:] if account_digits else ''
+        files = request.FILES.getlist('receiptFiles') or request.FILES.getlist('receiptFile')
+        if not files:
+            return Response({'error': 'This field is required.', 'code': 'file_required'}, status=400)
+        if len(files) > MAX_RECEIPT_FILES:
+            return Response({'error': 'At most 3 files.', 'code': 'too_many_files'}, status=400)
+        for f in files:
+            image_error = _validate_receipt_file(f)
+            if image_error:
+                return Response({'error': image_error, 'code': ERROR_CODES.get(image_error, 'file_not_valid')}, status=400)
 
         payment = Payment.objects.create(
             invoice=invoice,
-            amountPaid=amount_paid,
-            paymentMethod=payment_method,
-            paymentDate=payment_date,
-            receiptFile=receipt_file,
+            amountPaid=amount_due(invoice),        # placeholder; the real amount comes from Verify.ET
+            paymentMethod='bank_transfer',
+            paymentDate=timezone.localdate(),
+            receiptFile=files[0],
             submittedViaPublicLink=True,
             verificationStatus='pending_manager_review',
             paymentStatus='pending',
-            bidderBank=(request.data.get('bidderBank') or '').strip().lower(),
-            bidderReferenceNumber=(request.data.get('bidderReferenceNumber') or '').strip(),
-            bidderAccountSuffix=bidder_account_suffix,
-            bidderPhoneNumber=(request.data.get('bidderPhoneNumber') or '').strip(),
         )
+        for extra in files[1:]:
+            PaymentReceiptFile.objects.create(payment=payment, file=extra)
 
         if invoice.status == 'pending_payment':
             previous = invoice.status
@@ -238,23 +216,6 @@ class PublicReceiptUploadView(APIView):
                 action_type='upload_payment',
             )
 
-        # Best-effort: always extracts the bank reference for the reviewer's
-        # benefit; only auto-approves/rejects when an admin has turned
-        # automation on. A failure here never affects the bidder's response.
-        # Note this is synchronous: when automation is enabled the upload
-        # response waits on a Verify.ET call (and possibly a Gemini
-        # extraction), so this endpoint gets correspondingly slower.
-        try:
-            from .verify_et_automation import process_new_receipt
-            process_new_receipt(payment)
-        except Exception:
-            logger.exception('Auto-verify failed (non-fatal)')
-
-        return Response(
-            {
-                'success': True,
-                'message': 'Receipt received. It will be reviewed shortly.',
-                'paymentId': payment.id,
-            },
-            status=http_status.HTTP_201_CREATED,
-        )
+        dispatch_receipt_processing(payment)
+        return Response({'success': True, 'message': 'Receipt received. It will be reviewed shortly.',
+                         'paymentId': payment.id}, status=201)

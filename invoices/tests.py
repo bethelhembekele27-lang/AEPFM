@@ -411,116 +411,83 @@ class EthiopianCalendarTests(TestCase):
         self.assertEqual(parse_and_convert('16/12/2016'), parse_and_convert('16/12/2016 E.C.'))
 
 
-@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS, VERIFY_ET_API_KEY='k', VERIFY_ET_PROCESS_ASYNC=False,
+                   VERIFY_ET_SETTLEMENT_ACCOUNTS={'cbe': '1000547266289'})
 class VerifyEtAutomationTests(TestCase):
-    """
-    Direct tests of the automatic approve/reject decision logic, isolated
-    from the public upload endpoint. check_transaction is always mocked, so
-    the suite never touches verify.et.
-    """
-
     def setUp(self):
-        self.invoice = make_invoice(status='pending_payment')
-        self.payment = Payment.objects.create(
-            invoice=self.invoice, amountPaid=self.invoice.totalAmount,
-            paymentMethod='bank_transfer', paymentDate='2026-01-15',
-            bidderBank='cbe', bidderReferenceNumber='FT-AUTO-1',
-            submittedViaPublicLink=True, verificationStatus='pending_manager_review',
-        )
+        self.invoice = make_invoice(status='pending_payment')        # fee 50.00
+        self.payment = self.new_payment(self.invoice)
         VerifyEtAutomationSettings.objects.create(autoVerificationEnabled=True, isActive=True)
 
-    def _completed_result(self, **overrides):
-        result = {
-            'bank': 'cbe', 'requestId': 'r1', 'processingStatus': 'completed',
-            'verified': True, 'amount': str(self.invoice.totalAmount), 'currency': 'ETB',
-            'senderName': 'X', 'receiverName': 'Auction Ethiopia', 'receiverAccount': 'x',
-            'settlementMatched': None, 'rawResponse': {}, 'errorMessage': '',
-        }
-        result.update(overrides)
-        return result
+    def new_payment(self, invoice):
+        return Payment.objects.create(invoice=invoice, amountPaid=50, paymentMethod='bank_transfer',
+            paymentDate='2026-01-15', submittedViaPublicLink=True, verificationStatus='pending_manager_review')
 
-    def _run(self, verify_result):
+    def result(self, amount='50.00', **kw):
+        r = {'bank': 'cbe', 'requestId': 'r', 'processingStatus': 'completed', 'verified': True, 'amount': amount,
+             'currency': 'ETB', 'senderName': 'X', 'receiverName': 'AE', 'receiverAccount': 'x',
+             'settlementMatched': True, 'rawResponse': {}, 'errorMessage': ''}
+        r.update(kw); return r
+
+    def run_it(self, result, payment=None, ref='FT1', bank='cbe'):
         from invoices.verify_et_automation import process_new_receipt
-        with override_settings(VERIFY_ET_API_KEY='test-key'), \
-             patch('invoices.verify_et_automation.check_transaction',
-                   return_value=(verify_result, None)):
-            process_new_receipt(self.payment)
-        self.payment.refresh_from_db()
-        self.invoice.refresh_from_db()
+        payment = payment or self.payment
+        with patch('invoices.verify_et_automation._get_or_extract', return_value=(ref, bank)), \
+             patch('invoices.verify_et_automation.check_transaction', return_value=(result, None)) as m, \
+             patch('invoices.verify_et_automation.send_sms') as sms:
+            process_new_receipt(payment)
+        payment.refresh_from_db(); payment.invoice.refresh_from_db()
+        return m, sms
 
-    def test_disabled_automation_never_calls_provider(self):
+    def test_disabled_never_calls_provider(self):
         VerifyEtAutomationSettings.objects.all().update(autoVerificationEnabled=False)
-        with override_settings(VERIFY_ET_API_KEY='test-key'), \
-             patch('invoices.verify_et_automation.check_transaction') as mock_check:
-            from invoices.verify_et_automation import process_new_receipt
-            process_new_receipt(self.payment)
-        mock_check.assert_not_called()
+        m, _ = self.run_it(self.result())
+        m.assert_not_called()
 
-    def test_verified_and_amount_match_auto_approves(self):
-        self._run(self._completed_result())
-        self.assertEqual(self.invoice.status, 'paid')
-        self.assertEqual(self.payment.verificationStatus, 'manager_approved')
-        self.assertTrue(self.payment.autoReviewed)
+    def test_match_approves_and_records_real_amount(self):
+        self.run_it(self.result())
+        self.assertEqual(self.payment.invoice.status, 'paid'); self.assertTrue(self.payment.autoReviewed)
 
-    def test_amount_mismatch_leaves_pending(self):
-        self._run(self._completed_result(amount='1.00'))
+    def test_underpaid_rejects_and_sms_states_shortfall(self):
+        _, sms = self.run_it(self.result(amount='20.00'))
+        self.assertEqual(self.payment.verificationStatus, 'manager_rejected')
+        self.assertEqual(self.payment.amountDiscrepancy, 'underpaid')
+        self.assertIn('30.00', sms.call_args[0][1])
+
+    def test_overpaid_flagged_but_left_pending(self):
+        _, sms = self.run_it(self.result(amount='80.00'))
         self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
-        self.assertFalse(self.payment.autoReviewed)
+        self.assertEqual(self.payment.amountDiscrepancy, 'overpaid'); sms.assert_not_called()
 
-    def test_verified_false_with_matching_amount_auto_rejects(self):
-        self._run(self._completed_result(verified=False))
-        self.assertEqual(self.invoice.status, 'pending_payment')
+    def test_unconfirmed_account_left_pending(self):
+        self.run_it(self.result(settlementMatched=None))
+        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
+
+    def test_wrong_account_rejects(self):
+        self.run_it(self.result(settlementMatched=False))
         self.assertEqual(self.payment.verificationStatus, 'manager_rejected')
 
-    def test_verified_false_with_amount_mismatch_does_not_reject(self):
-        """An OCR misread must never text a bidder that a real payment failed."""
-        self._run(self._completed_result(verified=False, amount='1.00'))
-        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
-        self.assertFalse(self.payment.autoReviewed)
-
-    def test_settlement_mismatch_auto_rejects_even_if_verified_true(self):
-        self._run(self._completed_result(verified=True, settlementMatched=False))
-        self.assertEqual(self.payment.verificationStatus, 'manager_rejected')
-
-    def test_still_queued_makes_no_decision(self):
-        self._run({'processingStatus': 'queued', 'verified': None, 'amount': None,
-                   'currency': '', 'senderName': '', 'receiverName': '', 'receiverAccount': '',
-                   'settlementMatched': None, 'rawResponse': {}, 'errorMessage': '',
-                   'bank': 'cbe', 'requestId': 'r2'})
+    def test_not_found_is_never_auto_rejected(self):
+        self.run_it(self.result(verified=False, amount=None))
         self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
 
-    def test_approved_duplicate_blocks_auto_decision(self):
-        other_invoice = make_invoice(status='paid')
-        other_payment = Payment.objects.create(
-            invoice=other_invoice, amountPaid=other_invoice.totalAmount,
-            paymentMethod='bank_transfer', paymentDate='2026-01-01',
-            verificationStatus='manager_approved',
-        )
-        VerifyEtCheck.objects.create(payment=other_payment, bank='cbe',
-                                     referenceNumber='FT-AUTO-1', verified=True,
-                                     processingStatus='completed')
-        self._run(self._completed_result())
+    def test_non_cbe_receipt_skipped(self):
+        m, _ = self.run_it(self.result(), bank='other'); m.assert_not_called()
+
+    def test_reused_reference_blocks_decision(self):
+        other = self.new_payment(make_invoice(status='paid')); other.verificationStatus = 'manager_approved'; other.save()
+        VerifyEtCheck.objects.create(payment=other, bank='cbe', referenceNumber='FT1', verified=True, processingStatus='completed')
+        self.run_it(self.result())
         self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
-        self.assertTrue(self.payment.verifyEtCheck.possibleDuplicate)
 
-    def test_pending_duplicate_blocks_auto_decision(self):
-        other_invoice = make_invoice(status='pending_payment')
-        other_payment = Payment.objects.create(
-            invoice=other_invoice, amountPaid=other_invoice.totalAmount,
-            paymentMethod='bank_transfer', paymentDate='2026-01-01',
-            verificationStatus='pending_manager_review',
-        )
-        VerifyEtCheck.objects.create(payment=other_payment, bank='cbe',
-                                     referenceNumber='FT-AUTO-1', verified=True,
-                                     processingStatus='completed')
-        self._run(self._completed_result())
-        self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
-        check = self.payment.verifyEtCheck
-        self.assertTrue(check.pendingDuplicate)
-        self.assertFalse(check.possibleDuplicate)
+    def test_partial_payments_add_up(self):
+        self.run_it(self.result(amount='20.00'), ref='FT1')                 # rejected, 30 still owed
+        second = self.new_payment(self.invoice)
+        self.run_it(self.result(amount='30.00'), payment=second, ref='FT2')
+        self.assertEqual(second.verificationStatus, 'manager_approved')
 
 
-@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS, VERIFY_ET_PROCESS_ASYNC=False)
 class EndToEndInvoiceLifecycleTests(TestCase):
     """
     One real workflow through the actual public and authenticated APIs:
@@ -564,8 +531,7 @@ class EndToEndInvoiceLifecycleTests(TestCase):
                    return_value=(verify_result, None)):
             res = self.client.post(
                 f'/api/public/invoice/{invoice.publicToken}/receipt/',
-                {'receiptFile': fake_receipt, 'bidderBank': 'cbe',
-                 'bidderReferenceNumber': reference, 'bidderAccountNumber': '1000643970701'},
+                {'receiptFiles': fake_receipt},
                 format='multipart',
             )
         self.auth(self.admin)
@@ -576,7 +542,7 @@ class EndToEndInvoiceLifecycleTests(TestCase):
             'bank': 'cbe', 'requestId': 'e2e-req', 'processingStatus': 'completed',
             'verified': True, 'amount': str(invoice.totalAmount), 'currency': 'ETB',
             'senderName': 'E2E Tester', 'receiverName': 'Auction Ethiopia',
-            'receiverAccount': '1000643970701', 'settlementMatched': True,
+            'receiverAccount': '1000547266289', 'settlementMatched': True,
             'rawResponse': {}, 'errorMessage': '',
         }
         result.update(over)

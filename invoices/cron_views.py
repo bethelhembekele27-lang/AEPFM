@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.utils import timezone
+import hmac
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -14,7 +15,7 @@ class FlagOverdueView(APIView):
 
     def post(self, request):
         secret = request.headers.get('X-Cron-Secret', '')
-        if not settings.CRON_SECRET or secret != settings.CRON_SECRET:
+        if not settings.CRON_SECRET or not hmac.compare_digest(secret.encode(), settings.CRON_SECRET.encode()):
             return Response({'error': 'Forbidden'}, status=http_status.HTTP_403_FORBIDDEN)
 
         today = timezone.localdate()

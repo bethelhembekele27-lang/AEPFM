@@ -10,7 +10,7 @@ SECRET_KEY = config(
     default="django-insecure-$@vt=8b)un9e=m^zp0l97nnw0v#emzdw#!h3&rtrf!xcxutxu^"
 )
 
-DEBUG = config("DEBUG", default=True, cast=bool)
+DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
@@ -168,6 +168,10 @@ SMS_ALLOWED_NUMBERS = [n.strip() for n in config("SMS_ALLOWED_NUMBERS", default=
 SMS_DEFAULT_DUE_DAYS = config("SMS_DEFAULT_DUE_DAYS", default=14, cast=int)
 TEXTBEE_API_KEY = config("TEXTBEE_API_KEY", default="")
 TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
+# Afro Message (replaces textbee)
+AFROMESSAGE_TOKEN = config("AFROMESSAGE_TOKEN", default="")
+AFROMESSAGE_IDENTIFIER_ID = config("AFROMESSAGE_IDENTIFIER_ID", default="")
+AFROMESSAGE_SENDER = config("AFROMESSAGE_SENDER", default="")
 # --- Google OAuth (Phase 7) ---
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 # --- Gemini receipt extraction (Phase 9) ---
@@ -180,10 +184,10 @@ VERIFY_ET_API_KEY = config("VERIFY_ET_API_KEY", default="")
 # {"cbe": "1000123456789", "telebirr": "0911234567"}. Leave empty until the
 # real numbers are known; settlementMatched then comes back null and the UI
 # shows no settlement warning.
-VERIFY_ET_SETTLEMENT_ACCOUNTS = {
-    "cbe": "1000643970701",
-    "boa": "164720257",
-}
+_CBE_ACCOUNT = config("VERIFY_ET_CBE_ACCOUNT", default="1000547266289")
+VERIFY_ET_SETTLEMENT_ACCOUNTS = {"cbe": _CBE_ACCOUNT}
+VERIFY_ET_CBE_SUFFIX = config("VERIFY_ET_CBE_SUFFIX", default=_CBE_ACCOUNT[-8:])
+VERIFY_ET_PROCESS_ASYNC = config("VERIFY_ET_PROCESS_ASYNC", default=True, cast=bool)
 # --- Cron (Phase 4) ---
 # Shared secret for the external daily pinger that hits POST /api/cron/flag-overdue/.
 # Empty means the endpoint always answers 403, so nothing runs unprompted.
@@ -202,6 +206,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "public_receipt_upload": "10/hour",
         "public_invoice_pdf": "30/hour",
+        "verify_et_check": "60/hour",
+        "verify_et_refresh": "300/hour",
     },
 }
 

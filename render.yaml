@@ -35,7 +35,7 @@ services:
       - key: FRONTEND_BASE_URL
         value: "https://aepfm-frontend.onrender.com"
       - key: SMS_BACKEND
-        value: "console"
+        value: "afromessage"
       - key: SMS_ALLOWED_NUMBERS
         sync: false
       - key: TEXTBEE_API_KEY
@@ -47,6 +47,20 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: VERIFY_ET_API_KEY
+        sync: false
+      - key: VERIFY_ET_CBE_ACCOUNT
+        sync: false
+      - key: AFROMESSAGE_TOKEN
+        sync: false
+      - key: AFROMESSAGE_IDENTIFIER_ID
+        sync: false
+      - key: AFROMESSAGE_SENDER
+        sync: false
+      - key: VERIFY_ET_CBE_SUFFIX
+        sync: false
+      - key: VERIFY_ET_PROCESS_ASYNC
         sync: false
 
 

@@ -4,6 +4,7 @@ from django.db.models import Sum
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
     Invoice, InvoiceLot, Payment, Attachment, AuditLog,GeneratedReport,Role, SmsLog,
+    PaymentReceiptFile, SystemAuditLog,
 )
 
 @admin.register(Role)
@@ -155,3 +156,11 @@ class SmsLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(SystemAuditLog)
+class SystemAuditLogAdmin(admin.ModelAdmin):
+    list_display = ('createdAt', 'action', 'performedByName', 'target')
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False

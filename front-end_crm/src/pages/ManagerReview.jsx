@@ -130,7 +130,7 @@ function VerifyEtCell({ payment, onOpen }) {
         <ShieldIcon />
       </button>
       {check && (() => {
-        const { label, color } = verifyEtStatus(check, payment.amountPaid);
+        const { label, color } = verifyEtStatus(check, payment.amountDue);
         return <span className={`stamp ${color}`} style={{ cursor: "pointer" }} onClick={open}>{label}</span>;
       })()}
     </div>
@@ -154,7 +154,7 @@ const EMPTY_COPY = {
   manager_rejected: "No rejected receipts.",
 };
 
-export default function ManagerReview({ role, privileges, token }) {
+export default function ManagerReview({ privileges, token }) {
   const canManage = (privileges || []).includes("manager_verify_receipt");
   const restrictedView = !canManage && (privileges || []).includes("verify_payment");
   const canAccess = canManage || restrictedView;
@@ -315,9 +315,7 @@ export default function ManagerReview({ role, privileges, token }) {
           <div style={{ fontSize: 13, color: "var(--text-2)" }}>Review submitted payment receipts before marking invoices as paid.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {canManage && role === "administrator" && (
-            <AutoVerifyToggle token={token} />
-          )}
+          {(privileges || []).includes("manage_fee_config") && <AutoVerifyToggle token={token} />}
           {counts.pending_manager_review > 0 && (
             <div style={{ fontSize: 12.5, color: "var(--amber)", fontWeight: 600 }}>
               {counts.pending_manager_review} pending review
@@ -500,17 +498,11 @@ export default function ManagerReview({ role, privileges, token }) {
               )}
 
               <div className="fl" style={{ marginBottom: 8 }}>Receipt</div>
-              {drawerRow.receiptUrl ? (
-                isImageFile(drawerRow.receiptUrl) ? (
-                  <a href={fileUrl(drawerRow.receiptUrl)} target="_blank" rel="noopener noreferrer">
-                    <img src={fileUrl(drawerRow.receiptUrl)} alt="Receipt" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
-                  </a>
-                ) : (
-                  <a href={fileUrl(drawerRow.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn" style={{ width: "100%", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    <EyeIcon /> Open receipt document
-                  </a>
-                )
-              ) : <div className="locked-note" style={{ marginTop: 0 }}>No receipt file.</div>}
+              {(drawerRow.receiptUrls || []).map((u, i) => (
+                isImageFile(u)
+                  ? <a key={i} href={fileUrl(u)} target="_blank" rel="noopener noreferrer"><img src={fileUrl(u)} alt={`Receipt ${i + 1}`} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)", display: "block", marginBottom: 8 }} /></a>
+                  : <a key={i} href={fileUrl(u)} target="_blank" rel="noopener noreferrer" className="btn" style={{ width: "100%", textAlign: "center", display: "block", marginBottom: 8 }}>Open receipt {i + 1}</a>
+              ))}
             </div>
 
             <div style={{ marginTop: 20 }}>
@@ -521,9 +513,8 @@ export default function ManagerReview({ role, privileges, token }) {
                     Detected for Verify.ET
                   </div>
                   <div className="field-grid" style={{ marginBottom: 0, gap: "8px 20px" }}>
-                    <div className="field"><div className="fl">Bank</div><div className="fv">{drawerRow.extraction.detectedBank || "—"}</div></div>
                     <div className="field"><div className="fl">Reference #</div><div className="fv mono">{drawerRow.extraction.bankReferenceNumber || "—"}</div></div>
-                    <div className="field"><div className="fl">Phone</div><div className="fv mono">{drawerRow.extraction.detectedPhoneNumber || "—"}</div></div>
+                    <div className="field"><div className="fl">Amount on receipt</div><div className="fv amount">{drawerRow.extraction.totalAmount ?? "—"}</div></div>
                   </div>
                 </div>
               )}              <VerifyEtPanel
@@ -633,6 +624,11 @@ export default function ManagerReview({ role, privileges, token }) {
               <div style={{ fontSize: 12.5, color: "var(--text-3)", lineHeight: 1.5 }}>
                 {reviewing === "approve" ? "This immediately marks the invoice(s) as Paid and records it in the audit trail." : "The bidder will be notified by SMS and asked to resubmit."}
               </div>
+              {reviewing === "reject" && reviewRows.some(r => r.amountDiscrepancy === "underpaid") && (
+                <div style={{ fontSize: 12.5, color: "var(--text-3)", lineHeight: 1.5, marginTop: 4 }}>
+                  Underpaid receipts: the bidder will be told how much is still owed.
+                </div>
+              )}
             </div>
             <div style={{ padding: "18px 28px 28px" }}>
               <label style={{ display: "block", fontSize: 11.5, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-3)", marginBottom: 6 }}>
