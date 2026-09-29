@@ -176,7 +176,7 @@ AFROMESSAGE_SENDER = config("AFROMESSAGE_SENDER", default="")
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 # --- Gemini receipt extraction (Phase 9) ---
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
-GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-2.5-flash")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-3.8-flash")
 # --- Verify.ET transaction verification ---
 # Inert until VERIFY_ET_API_KEY is set; check_transaction() returns a
 # "not configured" error rather than calling out.

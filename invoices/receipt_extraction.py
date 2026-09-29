@@ -52,7 +52,12 @@ def extract_receipt_data(image_bytes, mime_type):
         return None, 'The AI response could not be parsed as JSON.', {'text': text}
     except Exception as e:
         logger.exception('Gemini extraction failed')
-        return None, f'Gemini error ({type(e).__name__}): {str(e)[:300]}', {}
+        err_text = str(e)
+        if 'NotFound' in type(e).__name__ or '404' in err_text:
+            return None, f'Gemini model "{settings.GEMINI_MODEL}" is invalid or retired. Set GEMINI_MODEL to a current model (see genai.list_models()). Raw: {err_text[:200]}', {}
+        if 'ResourceExhausted' in type(e).__name__ or '429' in err_text:
+            return None, f'Gemini quota exhausted for model "{settings.GEMINI_MODEL}". Check billing/limits. Raw: {err_text[:200]}', {}
+        return None, f'Gemini error ({type(e).__name__}): {err_text[:300]}', {}
 
 
 def _receipt_files(payment):
