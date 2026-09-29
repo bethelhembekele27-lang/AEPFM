@@ -6,7 +6,6 @@ import time
 
 from django.conf import settings
 from django.db import close_old_connections, transaction
-from django.db.models import Q
 from django.utils import timezone
 
 from .audit import log_audit
@@ -25,13 +24,10 @@ def check_reference_reuse(reference, exclude_payment_id=None):
     never be counted twice."""
     if not reference:
         return False, False
-    qs = VerifyEtCheck.objects.filter(bank__iexact='cbe', referenceNumber=reference, verified=True)
+    qs = VerifyEtCheck.objects.filter(bank__iexact='cbe', referenceNumber=reference)
     if exclude_payment_id:
         qs = qs.exclude(payment_id=exclude_payment_id)
-    strong = qs.filter(
-        Q(payment__verificationStatus='manager_approved')
-        | Q(payment__verificationStatus='manager_rejected', payment__amountDiscrepancy='underpaid')
-    ).exists()
+    strong = qs.filter(countsAsUsed=True).exists()
     pending = qs.filter(payment__verificationStatus='pending_manager_review').exists()
     return strong, pending
 
@@ -165,6 +161,13 @@ def _apply_decision(payment, check, decision, reason):
     note = (f"Auto-{'approved' if approve else 'rejected'} by Verify.ET: {reason} "
             f"(ref {check.referenceNumber}, paid {check.amount}, flag {payment.amountDiscrepancy or 'none'}).")
     with transaction.atomic():
+        # Lock any other check row for this same reference first, so a
+        # concurrent decision on the same stolen/duplicate reference can't
+        # slip through in the gap between the reuse check and this save.
+        VerifyEtCheck.objects.select_for_update().filter(
+            bank='cbe', referenceNumber=check.referenceNumber,
+        ).exclude(pk=check.pk)
+
         payment.autoReviewed = True
         payment.managerVerifiedDate = timezone.now()
         payment.managerNote = note
@@ -172,11 +175,15 @@ def _apply_decision(payment, check, decision, reason):
             payment.verificationStatus, payment.paymentStatus = 'manager_approved', 'verified'
             payment.verifiedDate, payment.amountPaid = timezone.now(), check.amount
             invoice.status = 'paid'
+            check.countsAsUsed = True
         else:
             payment.verificationStatus = 'manager_rejected'
             invoice.status = 'pending_payment'
+            check.countsAsUsed = payment.amountDiscrepancy == 'underpaid'  # credited partial also locks the reference
+
         payment.save(update_fields=['autoReviewed', 'verificationStatus', 'managerVerifiedDate', 'managerNote',
                                     'paymentStatus', 'verifiedDate', 'amountPaid'])
+        check.save(update_fields=['countsAsUsed'])
         invoice.save(update_fields=['status', 'updatedAt'])
         log_audit(invoice, f"Receipt {'approved' if approve else 'rejected'} automatically (Verify.ET)", None,
                   previous, invoice.status, reason=note, action_type='auto_verify_et')

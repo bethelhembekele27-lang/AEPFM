@@ -3,7 +3,7 @@ import uuid as uuid_lib
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from decimal import Decimal
 
 
@@ -524,10 +524,23 @@ class VerifyEtCheck(models.Model):
         default=False,
         help_text="True if this bank+referenceNumber also appears on a different PENDING (not yet reviewed) payment — a weaker signal than possibleDuplicate.",
     )
+    countsAsUsed = models.BooleanField(
+        default=False,
+        help_text="True when this check backs an approved payment or a credited underpaid partial — locks the reference from reuse.",
+    )
     rawResponse = models.JSONField(default=dict, blank=True)
     errorMessage = models.TextField(blank=True, default='')
     checkedAt = models.DateTimeField(auto_now_add=True)
     checkedBy = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bank', 'referenceNumber'],
+                condition=models.Q(countsAsUsed=True),
+                name='unique_used_verify_et_reference',
+            ),
+        ]
 
     def __str__(self):
         return f"Verify.ET check for payment #{self.payment_id}: {self.referenceNumber}"

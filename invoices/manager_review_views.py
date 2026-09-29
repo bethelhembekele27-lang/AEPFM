@@ -112,6 +112,11 @@ class ReceiptReviewView(APIView):
         with transaction.atomic():
             kind, diff, remaining = refresh_discrepancy(payment)
             check = getattr(payment, 'verifyEtCheck', None)
+            if check:
+                VerifyEtCheck.objects.select_for_update().filter(
+                    bank=check.bank, referenceNumber=check.referenceNumber,
+                ).exclude(pk=check.pk)
+
             payment.managerVerifiedBy = request.user
             payment.managerVerifiedDate = timezone.now()
             payment.managerNote = note
@@ -123,6 +128,9 @@ class ReceiptReviewView(APIView):
                 payment.verifiedDate = timezone.now()
                 if check and check.verified is True and check.settlementMatched is True:
                     payment.amountPaid = check.amount
+                if check:
+                    check.countsAsUsed = True
+                    check.save(update_fields=['countsAsUsed'])
                 invoice.status = 'paid'
                 log_audit(
                     invoice,
@@ -136,6 +144,9 @@ class ReceiptReviewView(APIView):
             else:
                 payment.verificationStatus = 'manager_rejected'
                 invoice.status = 'pending_payment'
+                if check and kind == 'underpaid':
+                    check.countsAsUsed = True
+                    check.save(update_fields=['countsAsUsed'])
                 log_audit(
                     invoice,
                     'Receipt rejected by manager',

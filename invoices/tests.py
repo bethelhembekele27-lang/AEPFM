@@ -476,7 +476,7 @@ class VerifyEtAutomationTests(TestCase):
 
     def test_reused_reference_blocks_decision(self):
         other = self.new_payment(make_invoice(status='paid')); other.verificationStatus = 'manager_approved'; other.save()
-        VerifyEtCheck.objects.create(payment=other, bank='cbe', referenceNumber='FT1', verified=True, processingStatus='completed')
+        VerifyEtCheck.objects.create(payment=other, bank='cbe', referenceNumber='FT1', verified=True, processingStatus='completed', countsAsUsed=True)
         self.run_it(self.result())
         self.assertEqual(self.payment.verificationStatus, 'pending_manager_review')
 
