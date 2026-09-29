@@ -6,7 +6,7 @@ const ShieldIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="
 
 export { ShieldIcon };
 
-export default function VerifyEtPanel({ payment, token, onUpdated }) {
+export default function VerifyEtPanel({ payment, token, onUpdated, onPaymentRefreshed }) {
   const [ref, setRef] = useState(payment?.verifyEtCheck?.referenceNumber || payment?.extraction?.bankReferenceNumber || "");
   const [suffix, setSuffix] = useState("");
   const [advanced, setAdvanced] = useState(false);
@@ -14,8 +14,25 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
   const [error, setError] = useState("");
   const [check, setCheck] = useState(payment?.verifyEtCheck || null);
   const polls = useRef(0);
+  const [reprocessing, setReprocessing] = useState(false);
   const auth = token ? { Authorization: `Token ${token}` } : {};
   const pending = check && check.processingStatus !== "completed" && check.processingStatus !== "failed";
+
+  // pick up a reference/check that finished after the panel opened
+  useEffect(() => {
+    setCheck((c) => payment?.verifyEtCheck || c);
+    setRef((cur) => cur || payment?.verifyEtCheck?.referenceNumber || payment?.extraction?.bankReferenceNumber || "");
+  }, [payment?.extraction?.bankReferenceNumber, payment?.verifyEtCheck?.processingStatus]);
+
+  async function reprocess() {
+    setReprocessing(true); setError("");
+    try {
+      const res = await apiCall(`/api/receipts/${payment.id}/reprocess/`, { method: "POST", headers: auth });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Re-run failed"); return; }
+      onPaymentRefreshed?.(data);
+    } catch (err) { setError("Network error"); console.error(err); } finally { setReprocessing(false); }
+  }
 
   function accept(data) { setCheck(data); onUpdated?.(data); }
 
@@ -58,6 +75,14 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
         <span className="badge-note" style={{ marginLeft: "auto" }}>CBE · Auction Ethiopia account</span>
         {payment.autoReviewed && <span className="badge-note" style={{ background: "var(--blue-bg)", color: "var(--blue)" }}>Auto-verified</span>}
       </div>
+      {(payment.autoProcessNote || payment.pendingReview !== false) && (
+        <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--text-2)", background: "var(--blue-bg)", display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+          <span>{payment.autoProcessNote ? `Auto-processing: ${payment.autoProcessNote}` : "Auto-processing has not reported yet."}</span>
+          {payment.verificationStatus === "pending_manager_review" && (
+            <button type="button" className="btn btn-sm" onClick={reprocess} disabled={reprocessing}>{reprocessing ? "Running…" : "Re-run"}</button>
+          )}
+        </div>
+      )}
       <div style={{ padding: 16 }}>
         <div className="section-label" style={{ marginTop: 0 }}>Transaction</div>
         <div className="field" style={{ marginBottom: 8 }}>

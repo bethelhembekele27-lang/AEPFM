@@ -264,3 +264,28 @@ class VerifyEtRefreshView(APIView):
             return Response({'error': error}, status=502)
         check = persist_check(payment, result, check.referenceNumber, check.accountSuffix, request.user)
         return Response(VerifyEtCheckSerializer(check).data)
+
+
+class ReceiptReprocessView(APIView):
+    """POST /api/receipts/<id>/reprocess/ - re-run extraction (+ Verify.ET/decision if automation is on), synchronously."""
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [VerifyEtCheckThrottle]
+
+    def post(self, request, payment_id):
+        if not (has_permission(request.user, 'manager_verify_receipt') or has_permission(request.user, 'verify_payment')):
+            return Response({'error': 'Permission denied'}, status=403)
+        try:
+            payment = Payment.objects.select_related('invoice', 'invoice__winner').get(pk=payment_id)
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment not found'}, status=404)
+        if payment.verificationStatus != 'pending_manager_review':
+            return Response({'error': 'Only receipts still pending review can be re-processed.'}, status=400)
+        from .verify_et_automation import process_new_receipt, _set_note
+        try:
+            process_new_receipt(payment)
+        except Exception as exc:
+            logger.exception('Reprocess failed')
+            _set_note(payment, f'Processing crashed: {type(exc).__name__}: {exc}')
+        payment = Payment.objects.select_related('invoice', 'invoice__winner').get(pk=payment_id)
+        from .serializers import ManagerPaymentSerializer
+        return Response(ManagerPaymentSerializer(payment, context={'request': request}).data)

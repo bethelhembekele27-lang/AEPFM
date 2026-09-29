@@ -75,20 +75,40 @@ def decide(check, payment):
     return None, 'overpaid - needs a human'
 
 
+def _set_note(payment, msg):
+    payment.autoProcessNote = f"[{timezone.localtime():%Y-%m-%d %H:%M}] {msg}"[:1000]
+    try:
+        payment.save(update_fields=['autoProcessNote'])
+    except Exception:
+        logger.exception('Could not save autoProcessNote')
+
+
 def _get_or_extract(payment):
+    """Returns (reference, detected_bank). Writes a note on every failure path."""
     extraction = getattr(payment, 'extraction', None)
-    if extraction is None and settings.GEMINI_API_KEY and payment.receiptFile:
+    if extraction is None:
+        if not settings.GEMINI_API_KEY:
+            # If Gemini is not configured, we can't extract - return empty to allow
+            # caller to proceed (e.g., test mocks that provide reference manually)
+            _set_note(payment, 'GEMINI_API_KEY is not set on the server - cannot read the receipt.')
+            return '', ''
+        if not payment.receiptFile:
+            _set_note(payment, 'No receipt file attached.')
+            return '', ''
         from .receipt_extraction import run_and_save_extraction
         try:
             extraction, err = run_and_save_extraction(payment, user=None)
-            if err:
-                extraction = None
-        except Exception:
+        except Exception as exc:
             logger.exception('Extraction failed for payment #%s', payment.id)
-            extraction = None
-    if not extraction:
-        return '', ''
-    return extraction.bankReferenceNumber or '', (extraction.detectedBank or '').lower()
+            extraction, err = None, f'{type(exc).__name__}: {exc}'
+        if err or not extraction:
+            _set_note(payment, f'Receipt reading failed: {err}')
+            return '', ''
+    bank = (extraction.detectedBank or '').lower()
+    if not extraction.bankReferenceNumber:
+        _set_note(payment, 'Receipt was read but no bank reference number was found. Enter it by hand.')
+        return '', bank
+    return extraction.bankReferenceNumber, bank
 
 
 def _poll(check, payment):
@@ -105,25 +125,37 @@ def _poll(check, payment):
 
 
 def process_new_receipt(payment):
-    reference, detected_bank = _get_or_extract(payment)       # always, for reviewer convenience
-    if not VerifyEtAutomationSettings.is_enabled() or not settings.VERIFY_ET_API_KEY or not reference:
+    reference, detected_bank = _get_or_extract(payment)       # always, so the reference is pre-filled
+    if not reference:
+        return                                                 # note already saved
+    if not VerifyEtAutomationSettings.is_enabled():
+        _set_note(payment, f'Reference {reference} filled in. Auto-verify is OFF - click "Check with Verify.ET".')
+        return
+    if not settings.VERIFY_ET_API_KEY:
+        _set_note(payment, 'VERIFY_ET_API_KEY is not set on the server.')
         return
     if detected_bank not in ('', 'cbe'):
-        return                                                 # not a CBE receipt: human handles it
+        _set_note(payment, f'Not a CBE receipt (detected: {detected_bank}). Needs manual review.')
+        return
     account = settings.VERIFY_ET_SETTLEMENT_ACCOUNTS.get('cbe')
     suffix = settings.VERIFY_ET_CBE_SUFFIX
     result, error = check_transaction(reference, suffix, account, wait_ms=8000)
     if error or not result:
         logger.info('Auto-verify failed for payment #%s: %s', payment.id, error)
+        _set_note(payment, f'Verify.ET call failed: {error}')
         return
     check = persist_check(payment, result, reference, suffix, None)
     if check.processingStatus != 'completed' and settings.VERIFY_ET_PROCESS_ASYNC:
         check = _poll(check, payment)
     if check.processingStatus != 'completed':
+        _set_note(payment, 'Verify.ET is still processing. Click "Check with Verify.ET" in a minute.')
         return
     decision, reason = decide(check, payment)
     if decision:
         _apply_decision(payment, check, decision, reason)
+        _set_note(payment, f"Automatically {'approved' if decision == 'approve' else 'rejected'}: {reason}.")
+    else:
+        _set_note(payment, f'Left for a human: {reason}.')
 
 
 def _apply_decision(payment, check, decision, reason):
@@ -167,11 +199,14 @@ def dispatch_receipt_processing(payment):
     payment_id = payment.id
 
     def job():
+        close_old_connections()
         try:
             p = Payment.objects.select_related('invoice', 'invoice__winner').get(pk=payment_id)
-            process_new_receipt(p)
-        except Exception:
-            logger.exception('Background receipt processing failed (non-fatal)')
+            try:
+                process_new_receipt(p)
+            except Exception as exc:
+                logger.exception('Background receipt processing failed (non-fatal)')
+                _set_note(p, f'Processing crashed: {type(exc).__name__}: {exc}')
         finally:
             close_old_connections()
 

@@ -331,6 +331,7 @@ class Payment(models.Model):
         choices=[('underpaid', 'Underpaid'), ('overpaid', 'Overpaid')],
     )
     amountDiscrepancyAmount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    autoProcessNote = models.TextField(blank=True, default='')
 
     def __str__(self):
         return f"{self.amountPaid} on {self.invoice.invoiceNumber}"

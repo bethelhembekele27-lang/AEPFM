@@ -489,6 +489,8 @@ class ManagerPaymentSerializer(PaymentSerializer):
             'submittedViaPublicLink',
             'extraction',
             'verifyEtCheck',
+            'autoReviewed',
+            'autoProcessNote',
         ]
 
     extraction = serializers.SerializerMethodField()

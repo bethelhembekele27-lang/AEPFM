@@ -208,18 +208,24 @@ export default function ManagerReview({ privileges, token }) {
 
   useEffect(() => { if (canAccess) { fetchRows(tab); fetchCounts(); } else setLoading(false); }, [tab]);
 
-  async function fetchRows(status) {
-    setLoading(true);
-    setError("");
+  useEffect(() => {
+    if (!canAccess || tab !== "pending_manager_review") return;
+    const t = setInterval(() => { fetchRows(tab, true); fetchCounts(); }, 10000);
+    return () => clearInterval(t);
+  }, [tab]);
+
+  async function fetchRows(status, silent = false) {
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const res = await apiCall(`/api/receipts/?verificationStatus=${status}`, { headers: token ? { Authorization: `Token ${token}` } : {} });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to load receipts"); return; }
+      if (!res.ok) { if (!silent) setError(data.error || "Failed to load receipts"); return; }
       setRows(data);
+      setDrawerRow((d) => (d ? (data.find((r) => r.id === d.id) || d) : d));
     } catch (err) {
-      setError("Network error loading receipts");
+      if (!silent) setError("Network error loading receipts");
       console.error(err);
-    } finally { setLoading(false); }
+    } finally { if (!silent) setLoading(false); }
   }
 
   async function fetchCounts() {
@@ -518,11 +524,16 @@ export default function ManagerReview({ privileges, token }) {
                   </div>
                 </div>
               )}              <VerifyEtPanel
+                key={drawerRow.id}
                 payment={drawerRow}
                 token={token}
                 onUpdated={(data) => {
                   setDrawerRow((r) => ({ ...r, verifyEtCheck: data }));
                   setRows((prev) => prev.map((r) => (r.id === drawerRow.id ? { ...r, verifyEtCheck: data } : r)));
+                }}
+                onPaymentRefreshed={(p) => {
+                  setDrawerRow(p);
+                  setRows((prev) => prev.map((r) => (r.id === p.id ? p : r)));
                 }}
               />
             </div>
@@ -657,10 +668,15 @@ export default function ManagerReview({ privileges, token }) {
             </div>
             <div className="modal-body">
               <VerifyEtPanel
+                key={verifyModalRow.id}
                 payment={verifyModalRow}
                 token={token}
                 onUpdated={(data) => {
                   setRows((prev) => prev.map((r) => (r.id === verifyModalRow.id ? { ...r, verifyEtCheck: data } : r)));
+                }}
+                onPaymentRefreshed={(p) => {
+                  setVerifyModalRow(p);
+                  setRows((prev) => prev.map((r) => (r.id === p.id ? p : r)));
                 }}
               />
             </div>

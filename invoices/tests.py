@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 
@@ -526,9 +526,13 @@ class EndToEndInvoiceLifecycleTests(TestCase):
         self.client.credentials()
         fake_receipt = SimpleUploadedFile('receipt.jpg', b'\xff\xd8\xff' + (b'0' * 25000),
                                           content_type='image/jpeg')
+        # Mock extraction to return the reference number
         with patch('invoices.public_views._validate_receipt_file', return_value=None), \
              patch('invoices.verify_et_automation.check_transaction',
-                   return_value=(verify_result, None)):
+                   return_value=(verify_result, None)), \
+             patch('invoices.verify_et_automation._get_or_extract',
+                   return_value=(reference, 'cbe')), \
+             patch('invoices.verify_et_automation._set_note'):
             res = self.client.post(
                 f'/api/public/invoice/{invoice.publicToken}/receipt/',
                 {'receiptFiles': fake_receipt},
