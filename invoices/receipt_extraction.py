@@ -93,11 +93,10 @@ def run_and_save_extraction(payment, user):
         mime_type = mimetypes.guess_type(f.name)[0] or 'image/jpeg'
         data, error, raw = extract_receipt_data(image_bytes, mime_type)
         if error:
-            last_error = error; continue
-        if best is None:
-            best = (data, raw)
-        if data.get('bankReferenceNumber'):
-            best = (data, raw); break
+            last_error = error
+            continue
+        best = (data, raw)
+        break  # stop at the first image that actually processed, reference or not
     if best is None:
         return None, last_error or 'This payment has no receipt file.'
     data, raw = best
