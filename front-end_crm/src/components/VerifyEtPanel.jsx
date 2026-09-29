@@ -82,7 +82,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated }) {
             <div className="section-label" style={{ margin: "0 0 10px" }}>Result</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span className={`stamp ${status.color}`} style={{ fontSize: 12 }}>{status.label}</span>
-              {check.amount && <span className="mono amount" style={{ fontSize: 13.5 }}>ETB {check.amount}</span>
+              {check.amount && <span className="mono amount" style={{ fontSize: 13.5 }}>ETB {check.amount}</span>}
             </div>
             <div style={{ fontSize: 12.5, lineHeight: 1.7, color: "var(--text-2)" }}>
               <div>Amount due: ETB {due}</div>
