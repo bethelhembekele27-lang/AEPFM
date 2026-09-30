@@ -96,14 +96,14 @@ def build_rejection_message(invoice, note='', remaining=None, wrong_account=Fals
     winner = invoice.winner
     name = winner.bidderNameAmharic or winner.bidderName
     link = public_link(invoice)
+    reason = f" ምክንያት፡ {note}" if note else ""
     if remaining is not None and remaining > 0:      # underpaid only; never mention overpayment
-        return (f"ውድ {name}፣ የላኩት ክፍያ ከሚጠበቀው ያነሰ ነው። ቀሪ መክፈል የሚገባዎት ብር {remaining:,.2f} ነው። "
+        return (f"ውድ {name}፣ የላኩት ክፍያ ከሚጠበቀው ያነሰ ነው።{reason} ቀሪ መክፈል የሚገባዎት ብር {remaining:,.2f} ነው። "
                 f"ቀሪውን ከፍለው ደረሰኙን በዚህ አገናኝ ይላኩ፦ {link}")
     if wrong_account:
         acct = settings.VERIFY_ET_SETTLEMENT_ACCOUNTS.get('cbe', '')
-        return (f"ውድ {name}፣ የላኩት ክፍያ ወደ አክሽን ኢትዮጵያ ሂሳብ አልገባም። እባክዎ ወደ ኢትዮጵያ ንግድ ባንክ ሂሳብ ቁጥር {acct} "
+        return (f"ውድ {name}፣ የላኩት ክፍያ ወደ አክሽን ኢትዮጵያ ሂሳብ አልገባም።{reason} እባክዎ ወደ ኢትዮጵያ ንግድ ባንክ ሂሳብ ቁጥር {acct} "
                 f"ከፍለው ደረሰኙን በዚህ አገናኝ ይላኩ፦ {link}")
-    reason = f" ምክንያት፡ {note}" if note else ""
     return f"ውድ {name}፣ የላኩት የክፍያ ደረሰኝ ውድቅ ተደርጓል።{reason} እባክዎ በዚሁ አገናኝ በድጋሚ ይላኩ፦ {link}"
 
 
