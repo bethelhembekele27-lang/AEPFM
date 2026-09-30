@@ -60,6 +60,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         'generate_pdf': 'generate_invoice',
         'change_status': 'change_status_generic',
         'extend_due_date': 'extend_due_date',
+        'write_off': 'override_status',
     }
 
     def get_queryset(self):
@@ -312,6 +313,31 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         log_audit(invoice, 'Extend due date', request.user, previous, new_due_date, request.data.get('reason', ''), action_type='extend_due_date')
         serializer = InvoiceDetailSerializer(invoice)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='write-off')
+    def write_off(self, request, pk=None):
+        """
+        Write off an invoice that will never be paid — winner unreachable,
+        deal fell through, etc. Terminal like paid/cancelled/waived, so it
+        won't reappear in the working queues, and it keeps an explicit
+        recorded reason rather than just silently disappearing.
+        """
+        if not has_permission(request.user, 'override_status'):
+            return Response({'error': 'Only administrators can write off an invoice.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        invoice = self.get_object()
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'reason': ['A reason is required.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        previous = invoice.status
+        invoice.status = 'written_off'
+        invoice.writeOffReason = reason
+        invoice.save(update_fields=['status', 'writeOffReason', 'updatedAt'])
+        log_audit(invoice, 'Written off', request.user, previous, 'written_off',
+                  reason=reason, action_type='change_status')
+        return Response(InvoiceDetailSerializer(invoice).data)
 
     @action(detail=True, methods=['get', 'post'], url_path='payments')
     def payments(self, request, pk=None):

@@ -1,7 +1,6 @@
 from pathlib import Path
 from decouple import config
 import dj_database_url
-import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
@@ -11,6 +10,23 @@ SECRET_KEY = config(
 )
 
 DEBUG = config("DEBUG", default=False, cast=bool)
+
+# --- Error monitoring (Sentry, free tier) ------------------------------
+# Inert until SENTRY_DSN is set in the environment. send_default_pii stays
+# False on purpose: this app holds bidder TINs, phone numbers, bank suffixes
+# and account numbers, and none of that belongs in a third-party error
+# tracker. The tradeoff is that a report won't show the request body, which
+# is the correct trade for this data.
+SENTRY_DSN = config("SENTRY_DSN", default="")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
 
 ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
@@ -163,12 +179,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # --- SMS (Phase 4) ---
 FRONTEND_BASE_URL = config("FRONTEND_BASE_URL", default="http://localhost:5173").rstrip("/")
-SMS_BACKEND = config("SMS_BACKEND", default="console")   # 'console' sends nothing; 'textbee' sends for real
+SMS_BACKEND = config("SMS_BACKEND", default="console")   # 'console' sends nothing; 'afromessage' sends for real
 SMS_ALLOWED_NUMBERS = [n.strip() for n in config("SMS_ALLOWED_NUMBERS", default="").split(",") if n.strip()]
 SMS_DEFAULT_DUE_DAYS = config("SMS_DEFAULT_DUE_DAYS", default=14, cast=int)
-TEXTBEE_API_KEY = config("TEXTBEE_API_KEY", default="")
-TEXTBEE_DEVICE_ID = config("TEXTBEE_DEVICE_ID", default="")
-# Afro Message (replaces textbee)
+# Afro Message — the live SMS provider
 AFROMESSAGE_TOKEN = config("AFROMESSAGE_TOKEN", default="")
 AFROMESSAGE_IDENTIFIER_ID = config("AFROMESSAGE_IDENTIFIER_ID", default="")
 AFROMESSAGE_SENDER = config("AFROMESSAGE_SENDER", default="")

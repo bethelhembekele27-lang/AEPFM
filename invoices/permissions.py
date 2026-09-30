@@ -29,7 +29,7 @@ ROLE_PERMISSIONS = {
 # ---------------------------------------------------------------------------
 # Status machine — locked statuses only move via override_status (admin).
 # ---------------------------------------------------------------------------
-LOCKED_STATUSES = ['paid', 'cancelled', 'waived']
+LOCKED_STATUSES = ['paid', 'cancelled', 'waived', 'written_off']
 
 ALLOWED_TRANSITIONS = {
     'invoice_generated':  ['pending_payment', 'cancelled', 'waived'],

@@ -214,7 +214,7 @@ class InvoiceDetailSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
             'importBatch', 'totalAmount', 'status', 'remarks',
             'createdAt', 'updatedAt', 'lots', 'payments', 'attachments',
             'bidderName', 'companyName','auctionCompany', 'winnerPhone',
-            'feePercentage', 'verifiedBy', 'columnMapping', 'smsSentAt', 'smsSendCount',
+            'feePercentage', 'verifiedBy', 'columnMapping', 'smsSentAt', 'smsSendCount', 'writeOffReason', 'escalatedAt',
         ]
 
     def get_payments(self, obj):

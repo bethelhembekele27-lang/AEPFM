@@ -7,6 +7,7 @@ export const statusLabels = {
   overdue: "Overdue",
   cancelled: "Cancelled",
   waived: "Waived",
+  written_off: "Written Off",
 };
 
 export const statusCounts = {
@@ -14,7 +15,7 @@ export const statusCounts = {
   paid: 55, overdue: 8, cancelled: 2, waived: 0,
 };
 
-export const LOCKED_STATUSES = ["paid", "cancelled", "waived"];
+export const LOCKED_STATUSES = ["paid", "cancelled", "waived", "written_off"];
 
 export const roleLabels = {
   administrator: "Administrator",

@@ -75,6 +75,10 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showWriteOff, setShowWriteOff] = useState(false);
+  const [writeOffReason, setWriteOffReason] = useState("");
+  const [writeOffError, setWriteOffError] = useState("");
+  const [writeOffSaving, setWriteOffSaving] = useState(false);
   const [extractionPopover, setExtractionPopover] = useState(null);
   const [showExtraFields, setShowExtraFields] = useState(false);
 
@@ -271,6 +275,36 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const locked = LOCKED_STATUSES.includes(invoice.status);
   const canGeneratePdf = (privileges || []).includes("generate_invoice") && !locked;
 
+  async function submitWriteOff() {
+    const reason = writeOffReason.trim();
+    if (!reason) {
+      setWriteOffError("A reason is required - it is kept on the record permanently.");
+      return;
+    }
+    setWriteOffSaving(true);
+    setWriteOffError("");
+    try {
+      const res = await apiCall(`/api/invoices/${invoiceId}/write-off/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Token ${token}` } : {}) },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setWriteOffError(data.reason ? String(Object.values(data.reason)[0]) : (data.error || "Write off failed"));
+        return;
+      }
+      setShowWriteOff(false);
+      setWriteOffReason("");
+      window.location.reload();
+    } catch (err) {
+      setWriteOffError("Network error");
+      console.error(err);
+    } finally {
+      setWriteOffSaving(false);
+    }
+  }
+
   return (
     <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
@@ -460,6 +494,9 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
 
           <div className="modal-actions">
             {canGeneratePdf && <button className="btn btn-sm" onClick={() => setShowGenerate(true)}>Generate invoice PDF</button>}
+            {role === "administrator" && invoice.status === "overdue" && (
+              <button className="btn btn-sm btn-danger" onClick={() => { setShowWriteOff(true); setWriteOffError(""); }}>Write off</button>
+            )}
           </div>
           {locked && (
             <div className="locked-note">
@@ -468,6 +505,40 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
           )}
         </div>
       </div>
+      {showWriteOff && (
+        <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) setShowWriteOff(false); }}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-head">
+              <h3 style={{ margin: 0, fontSize: 15 }}>Write off {invoice.invoiceNumber}?</h3>
+              <button className="modal-close" onClick={() => setShowWriteOff(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 14, color: "var(--text-2)" }}>
+                This marks the invoice as written off and closes it. It is kept on the
+                record permanently and cannot be reopened by staff.
+              </div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <div className="fl">Reason (required)</div>
+                <input
+                  value={writeOffReason}
+                  onChange={(e) => setWriteOffReason(e.target.value)}
+                  placeholder="e.g. Winner unreachable, deal fell through"
+                  autoFocus
+                />
+              </div>
+              {writeOffError && (
+                <div style={{ fontSize: 12.5, color: "var(--red)", marginBottom: 12 }}>{writeOffError}</div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-danger" onClick={submitWriteOff} disabled={writeOffSaving}>
+                  {writeOffSaving ? "Writing off..." : "Write off invoice"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setShowWriteOff(false)} disabled={writeOffSaving}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showGenerate && (
         <GeneratePdfModal
           invoices={[{ id: invoiceId, invoiceNumber: invoice.invoiceNumber, bidderName: invoice.bidderName, bidderNameAmharic: "", lots: invoice.lots }]}

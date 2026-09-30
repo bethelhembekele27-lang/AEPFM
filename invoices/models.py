@@ -182,6 +182,7 @@ class Invoice(models.Model):
         ('overdue', 'Overdue'),
         ('cancelled', 'Cancelled'),
         ('waived', 'Waived'),
+        ('written_off', 'Written Off'),
     ]
 
     winner = models.ForeignKey(Winner, on_delete=models.CASCADE, related_name='invoices')
@@ -214,6 +215,14 @@ class Invoice(models.Model):
     def totalAmount(self):
         return self.lots.aggregate(total=Sum('lotFee'))['total'] or Decimal('0.00')
 
+    writeOffReason = models.TextField(
+        blank=True, default='',
+        help_text="Why this invoice was written off — required, and kept on the record permanently.",
+    )
+    escalatedAt = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the automated overdue escalation reminder was last sent, so it fires once and not repeatedly.",
+    )
     def __str__(self):
         return f"{self.invoiceNumber} - {self.winner.bidderName}"
 

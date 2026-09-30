@@ -38,9 +38,11 @@ services:
         value: "afromessage"
       - key: SMS_ALLOWED_NUMBERS
         sync: false
-      - key: TEXTBEE_API_KEY
+      - key: AFROMESSAGE_TOKEN
         sync: false
-      - key: TEXTBEE_DEVICE_ID
+      - key: AFROMESSAGE_IDENTIFIER_ID
+        sync: false
+      - key: AFROMESSAGE_SENDER
         sync: false
       - key: CRON_SECRET
         sync: false
