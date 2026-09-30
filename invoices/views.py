@@ -511,6 +511,19 @@ class VerifyEtAutomationSettingsView(generics.GenericAPIView):
 
 # ================================================================= Auth View
 
+from rest_framework.throttling import AnonRateThrottle
+
+
+class LoginThrottle(AnonRateThrottle):
+    """Brute-force protection for the unauthenticated login endpoint.
+
+    Keyed by IP, 10/hour (see DEFAULT_THROTTLE_RATES). Deliberately not keyed
+    by username: that would let an attacker lock out a real staff member by
+    repeatedly guessing their own target's password.
+    """
+    scope = 'login'
+
+
 class LoginView(APIView):
     """
     POST /api/auth/login/
@@ -518,6 +531,7 @@ class LoginView(APIView):
     Returns: {token, username, role}
     """
     permission_classes = [AllowAny]
+    throttle_classes = [LoginThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)

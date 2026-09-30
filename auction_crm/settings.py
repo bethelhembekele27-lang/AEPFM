@@ -209,8 +209,34 @@ REST_FRAMEWORK = {
         "public_invoice_pdf": "30/hour",
         "verify_et_check": "60/hour",
         "verify_et_refresh": "300/hour",
+        # Brute-force protection on the unauthenticated login endpoint. Keyed
+        # by IP; enough to make credential stuffing impractical without
+        # locking out a shared-office NAT.
+        "login": "10/hour",
     },
 }
+
+# --- Security headers -------------------------------------------------
+# Applied only when DEBUG is off, i.e. in production. The public invoice PDF
+# is the one view that must render in an iframe; it opts out with
+# @xframe_options_exempt, which overrides X_FRAME_OPTIONS for that route
+# only, so DENY is safe globally.
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# Blanket cap on request body size. Individual validators cap receipts and
+# attachments at 10MB; this stops an oversized multipart body being fully
+# read into memory before any of those validators get a chance to run.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
+
+# Admin is moved off the guessable /admin/ path to keep it out of the
+# constant automated bot traffic every public Django deployment attracts.
+# This is noise reduction, not access control — real protection is the
+# staff-only accounts and 2FA/strong passwords behind it.
+DJANGO_ADMIN_URL = config("DJANGO_ADMIN_URL", default="admin/")
 
 LOGGING = {
     "version": 1,

@@ -9,7 +9,7 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from .audit import log_audit
-from .models import Payment, VerifyEtAutomationSettings, VerifyEtCheck
+from .models import Payment, VerifyEtAutomationSettings, VerifyEtCheck, Invoice
 from .payment_amounts import refresh_discrepancy
 from .sms import build_rejection_message, normalize_phone, send_sms
 from .verify_et import check_transaction, fetch_status
@@ -155,12 +155,19 @@ def process_new_receipt(payment):
 
 
 def _apply_decision(payment, check, decision, reason):
-    invoice = payment.invoice
-    previous = invoice.status
     approve = decision == 'approve'
     note = (f"Auto-{'approved' if approve else 'rejected'} by Verify.ET: {reason} "
             f"(ref {check.referenceNumber}, paid {check.amount}, flag {payment.amountDiscrepancy or 'none'}).")
     with transaction.atomic():
+        # Re-read the invoice under a row lock. Two receipts for the same
+        # invoice can be auto-processed concurrently; without this, both read
+        # the same `status` and both write it, so the second overwrites the
+        # first and the audit trail disagrees with the final state. Locking
+        # here serialises them, and the locked row is the one every read and
+        # write below uses.
+        invoice = Invoice.objects.select_for_update().get(pk=payment.invoice_id)
+        previous = invoice.status
+
         # Lock any other check row for this same reference first, so a
         # concurrent decision on the same stolen/duplicate reference can't
         # slip through in the gap between the reuse check and this save.

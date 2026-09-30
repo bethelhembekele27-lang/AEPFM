@@ -75,7 +75,7 @@ export default function VerifyEtPanel({ payment, token, onUpdated, onPaymentRefr
         <span className="badge-note" style={{ marginLeft: "auto" }}>CBE · Auction Ethiopia account</span>
         {payment.autoReviewed && <span className="badge-note" style={{ background: "var(--blue-bg)", color: "var(--blue)" }}>Auto-verified</span>}
       </div>
-      {(payment.autoProcessNote || payment.pendingReview !== false) && (
+      {payment.autoProcessNote && (
         <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--text-2)", background: "var(--blue-bg)", display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
           <span>{payment.autoProcessNote ? `Auto-processing: ${payment.autoProcessNote}` : "Auto-processing has not reported yet."}</span>
           {payment.verificationStatus === "pending_manager_review" && (

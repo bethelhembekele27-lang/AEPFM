@@ -3,9 +3,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from invoices.cron_views import FlagOverdueView
+from invoices.health_views import health_check
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('health/', health_check, name='health-check'),
+    path(settings.DJANGO_ADMIN_URL, admin.site.urls),
     path('api/', include('invoices.urls')),
     path('api/', include('invoices.report_urls')),
     path('api/', include('invoices.call_center_urls')),
