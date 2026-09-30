@@ -121,13 +121,22 @@ class ReceiptReviewView(APIView):
             payment.managerVerifiedDate = timezone.now()
             payment.managerNote = note
 
+            # Record what the bank actually confirmed was transferred, not just
+            # the amount the bidder claimed. Applies to approvals AND to
+            # underpaid rejections — otherwise the row keeps showing the full
+            # amount due as though it had been paid, which is exactly the
+            # number a reviewer glances at. Only trust a check that is
+            # verified and confirmed to our own account; the discrepancy
+            # fields (computed from verifyEtCheck.amount) are unaffected
+            # either way since remaining_due credits from the check, not here.
+            if check and check.amount is not None and check.verified is True and check.settlementMatched is True:
+                payment.amountPaid = check.amount
+
             if decision == 'approve':
                 payment.verificationStatus = 'manager_approved'
                 payment.paymentStatus = 'verified'
                 payment.verifiedBy = request.user
                 payment.verifiedDate = timezone.now()
-                if check and check.verified is True and check.settlementMatched is True:
-                    payment.amountPaid = check.amount
                 if check:
                     check.countsAsUsed = True
                     check.save(update_fields=['countsAsUsed'])

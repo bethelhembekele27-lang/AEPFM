@@ -171,9 +171,16 @@ def _apply_decision(payment, check, decision, reason):
         payment.autoReviewed = True
         payment.managerVerifiedDate = timezone.now()
         payment.managerNote = note
+        # Record what the bank actually confirmed was transferred, on approval
+        # AND on an underpaid rejection. Leaving amountPaid at the claimed
+        # value makes the queue show the full amount due as if paid, which is
+        # the number reviewers actually read. Safe: remaining_due() credits
+        # partial payments from verifyEtCheck__amount, not from amountPaid.
+        if check.amount is not None:
+            payment.amountPaid = check.amount
         if approve:
             payment.verificationStatus, payment.paymentStatus = 'manager_approved', 'verified'
-            payment.verifiedDate, payment.amountPaid = timezone.now(), check.amount
+            payment.verifiedDate = timezone.now()
             invoice.status = 'paid'
             check.countsAsUsed = True
         else:
