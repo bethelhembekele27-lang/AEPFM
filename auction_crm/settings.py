@@ -227,6 +227,9 @@ REST_FRAMEWORK = {
         # by IP; enough to make credential stuffing impractical without
         # locking out a shared-office NAT.
         "login": "10/hour",
+        # Read-only export API for the companion CRM, keyed on the service key
+        # rather than IP. Generous: a full backfill is many sequential pages.
+        "export_verified_winners": "60/min",
     },
 }
 

@@ -1,59 +1,8 @@
 import { useState, useEffect } from "react";
-import { LOCKED_STATUSES, money } from "../data";
+import { LOCKED_STATUSES, PDF_ROLES, money } from "../data";
 import { apiCall, API_BASE } from "../api";
 import Stamp from "./Stamp";
 import GeneratePdfModal from "./GeneratePdfModal";
-
-const AiSparkle = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M8.4 15.6l-2.1 2.1" /></svg>);
-
-function AiBadge({ payment, onOpen }) {
-  return (
-    <span
-      title="Click to view AI-extracted data"
-      onClick={() => onOpen(payment)}
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 18, height: 18, borderRadius: "50%", marginLeft: 6,
-        background: "var(--blue-bg)", color: "var(--blue)", fontSize: 10, fontWeight: 700,
-        cursor: "pointer", verticalAlign: "middle",
-      }}
-    >
-      AI
-    </span>
-  );
-}
-
-function ExtractionPopover({ extraction, amountPaid, onClose }) {
-  return (
-    <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ maxWidth: 420 }}>
-        <div className="modal-head">
-          <h3 style={{ margin: 0, fontSize: 15 }}>AI-extracted data</h3>
-          <button className="modal-close" onClick={onClose}>&times;</button>
-        </div>
-        <div className="modal-body">
-          <div className="field-grid" style={{ marginBottom: 0, gap: "10px 20px" }}>
-            <div className="field"><div className="fl">TIN</div><div className="fv mono">{extraction.tin || "—"}</div></div>
-            <div className="field"><div className="fl">Receipt #</div><div className="fv mono">{extraction.receiptNumber || "—"}</div></div>
-            <div className="field"><div className="fl">Date on receipt</div><div className="fv">{extraction.extractedDate || "—"}</div></div>
-            {extraction.convertedGregorianDate && (
-              <div className="field"><div className="fl">Converted (Gregorian)</div><div className="fv mono">{extraction.convertedGregorianDate}</div></div>
-            )}
-            <div className="field"><div className="fl">Customer name</div><div className="fv">{extraction.customerName || "—"}</div></div>
-            <div className="field"><div className="fl">Total amount</div><div className="fv amount">{extraction.totalAmount ?? "—"}</div></div>
-            <div className="field"><div className="fl">VAT amount</div><div className="fv amount">{extraction.vatAmount ?? "—"}</div></div>
-            <div className="field" style={{ gridColumn: "1 / -1" }}><div className="fl">Description</div><div className="fv">{extraction.description || "—"}</div></div>
-          </div>
-          {extraction.totalAmount && Number(extraction.totalAmount) !== Number(amountPaid) && (
-            <div style={{ background: "var(--amber-bg)", color: "var(--amber)", borderRadius: 8, padding: "10px 12px", marginTop: 14, fontSize: 12.5 }}>
-              Extracted total ({extraction.totalAmount}) doesn't match the recorded payment ({amountPaid}). Informational only.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const DOC_TYPES = [
   { v: "bank_slip", l: "Bank Slip" },
@@ -70,22 +19,11 @@ function fileUrl(path) {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
 
-export default function InvoiceDetailModal({ invoiceId, role, token, privileges, onClose }) {
+export default function InvoiceDetailModal({ invoiceId, role, token, onClose }) {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
-  const [showWriteOff, setShowWriteOff] = useState(false);
-  const [writeOffReason, setWriteOffReason] = useState("");
-  const [writeOffError, setWriteOffError] = useState("");
-  const [writeOffSaving, setWriteOffSaving] = useState(false);
-  const [extractionPopover, setExtractionPopover] = useState(null);
-  const [showExtraFields, setShowExtraFields] = useState(false);
-
-  const extraFieldKeys = invoice
-    ? [...new Set(invoice.lots.flatMap((l) => Object.keys(l.extraFields || {})))]
-    : [];
-  const anyExtraFields = extraFieldKeys.length > 0;
 
   const [attachments, setAttachments] = useState([]);
   const [docType, setDocType] = useState("other");
@@ -100,9 +38,9 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const canUpload = (privileges || []).includes("upload_payment_proof");
-  const canDelete = (privileges || []).includes("delete_records");
-  const canEdit = (privileges || []).includes("edit_invoice");
+  const canUpload = role === "administrator" || role === "auction_manager";
+  const canDelete = role === "administrator";
+  const canEdit = role === "administrator";
 
   useEffect(() => {
     if (invoiceId) fetchInvoice();
@@ -141,7 +79,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
       console.error("Failed to load attachments", err);
     }
   }
-
   async function handleUpload() {
     if (!file) return;
     setUploading(true);
@@ -179,18 +116,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
       else window.alert("Failed to delete attachment.");
     } catch (err) {
       window.alert("Network error deleting attachment.");
-      console.error(err);
-    }
-  }
-
-  async function handleDeletePayment(id) {
-    if (!window.confirm("Delete this payment record permanently?")) return;
-    try {
-      const res = await apiCall(`/api/payments/${id}/`, { method: "DELETE", headers: token ? { Authorization: `Token ${token}` } : {} });
-      if (res.ok) await fetchInvoice();
-      else window.alert("Failed to delete payment.");
-    } catch (err) {
-      window.alert("Network error deleting payment.");
       console.error(err);
     }
   }
@@ -261,7 +186,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
       console.error(err);
     }
   }
-
   if (!invoiceId) return null;
   if (loading) return (
     <div className="overlay active"><div className="modal" style={{ padding: 40, textAlign: "center" }}>Loading...</div></div>
@@ -273,37 +197,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
   );
 
   const locked = LOCKED_STATUSES.includes(invoice.status);
-  const canGeneratePdf = (privileges || []).includes("generate_invoice") && !locked;
-
-  async function submitWriteOff() {
-    const reason = writeOffReason.trim();
-    if (!reason) {
-      setWriteOffError("A reason is required - it is kept on the record permanently.");
-      return;
-    }
-    setWriteOffSaving(true);
-    setWriteOffError("");
-    try {
-      const res = await apiCall(`/api/invoices/${invoiceId}/write-off/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Token ${token}` } : {}) },
-        body: JSON.stringify({ reason }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setWriteOffError(data.reason ? String(Object.values(data.reason)[0]) : (data.error || "Write off failed"));
-        return;
-      }
-      setShowWriteOff(false);
-      setWriteOffReason("");
-      window.location.reload();
-    } catch (err) {
-      setWriteOffError("Network error");
-      console.error(err);
-    } finally {
-      setWriteOffSaving(false);
-    }
-  }
+  const canGeneratePdf = PDF_ROLES.includes(role) && !locked;
 
   return (
     <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -322,6 +216,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
             <Stamp status={invoice.status} />
             {locked && <span className="badge-note">Locked — no edits except admin override</span>}
           </div>
+          
 
           {editing ? (
             <div className="card" style={{ background: "var(--paper)", marginBottom: 16 }}>
@@ -358,7 +253,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
             <button className="btn btn-sm" style={{ marginBottom: 16 }} onClick={() => setEditing(true)}>Edit invoice</button>
           )}
 
-          <div className="section-label">Lots ({invoice.lots.length})</div>
+                    <div className="section-label">Lots ({invoice.lots.length})</div>
           <div className="tbl-wrap" style={{ marginBottom: 16 }}>
             <table>
               <thead><tr><th>Lot #</th><th>Auction</th><th>Winning amount</th><th>Fee %</th><th>Lot fee</th></tr></thead>
@@ -376,84 +271,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
             </table>
           </div>
 
-          {anyExtraFields && (
-            <div style={{ marginBottom: 16 }}>
-              <button className="btn btn-sm btn-ghost" onClick={() => setShowExtraFields((s) => !s)}>
-                {showExtraFields ? "Hide" : "Show"} additional spreadsheet columns
-              </button>
-              {showExtraFields && (
-                <div className="tbl-wrap" style={{ marginTop: 8 }}>
-                  <div style={{ overflowX: "auto" }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Lot #</th>
-                          {extraFieldKeys.map((k) => (
-                            <th key={k}>{k}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoice.lots.map((l) => (
-                          <tr key={l.id}>
-                            <td className="mono">{l.lotNumber}</td>
-                            {extraFieldKeys.map((k) => (
-                              <td key={k}>{(l.extraFields || {})[k] ?? <span style={{ color: "var(--text-3)" }}>—</span>}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {invoice.payments && invoice.payments.length > 0 && (
-            <>
-              <div className="section-label">Payments &amp; receipts</div>
-              <div className="tbl-wrap" style={{ marginBottom: 16 }}>
-                <table>
-                  <thead>
-                    <tr><th>Amount</th><th>Date</th><th>Status</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {invoice.payments.map((p) => (
-                      <tr key={p.id}>
-                        <td className="amount">{money(p.amountPaid)}</td>
-                        <td className="mono">{p.paymentDate}</td>
-                        <td>
-                          {p.verificationStatus === "manager_approved" && <span className="stamp paid">Approved{p.extraction !== undefined && p.extraction !== null && <AiBadge payment={p} onOpen={setExtractionPopover} />}</span>}
-                          {p.verificationStatus === "manager_rejected" && <span className="stamp cancelled">Rejected</span>}
-                          {p.verificationStatus === "pending_manager_review" && <span className="stamp pending_payment">Pending review</span>}
-                          {(!p.verificationStatus || p.verificationStatus === "not_applicable") && (
-                            <span className="stamp invoice_generated">{p.paymentStatus}</span>
-                          )}
-                        </td>
-                        <td style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                          {p.receiptUrl && (
-                            <a href={fileUrl(p.receiptUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-icon-only" title="View receipt">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </a>
-                          )}
-                          {canDelete && (
-                            <button className="btn btn-sm btn-icon-only btn-danger" title="Delete payment" onClick={() => handleDeletePayment(p.id)}>
-                              <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM9 16h2v-7H9v7zm4 0h2v-7h-2v7z" /></svg>
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-
           <div className="section-label">Attachments</div>
           <div className="attach-list" style={{ marginBottom: 12 }}>
             {attachments.length === 0 && <div className="locked-note" style={{ marginTop: 0 }}>No attachments yet.</div>}
@@ -462,28 +279,21 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
                 <a href={fileUrl(a.filePath)} target="_blank" rel="noopener noreferrer" style={{ color: "var(--brass-dark)" }}>
                   {a.fileName} <span style={{ color: "var(--text-3)", fontWeight: 400 }}>({a.documentType})</span>
                 </a>
-                {canDelete && <button className="btn btn-sm btn-danger" onClick={() => handleDeleteAttachment(a.id)}>Delete</button>}
+                {canDelete && (
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteAttachment(a.id)}>Delete</button>
+                )}
               </div>
             ))}
           </div>
           {canUpload && (
-            <div className="card" style={{ background: "var(--paper)", marginBottom: 16, padding: 16 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <select className="select-standalone" style={{ maxWidth: 190 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
-                  {DOC_TYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
-                </select>
-                <div
-                  className="filedrop"
-                  onClick={() => document.getElementById("staff-attach-input")?.click()}
-                  style={{ cursor: "pointer", flex: 1, minWidth: 200, padding: "10px 14px" }}
-                >
-                  {file ? file.name : "Click to choose a file — any document type"}
-                  <input id="staff-attach-input" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
-                </div>
-                <button className="btn btn-sm btn-brass" onClick={handleUpload} disabled={!file || uploading}>
-                  {uploading ? "Uploading..." : "Upload"}
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+              <select className="select-standalone" style={{ maxWidth: 200 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {DOC_TYPES.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
+              </select>
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ maxWidth: 220 }} />
+              <button className="btn btn-sm btn-brass" onClick={handleUpload} disabled={!file || uploading}>
+                {uploading ? "Uploading..." : "Upload"}
+              </button>
             </div>
           )}
 
@@ -494,9 +304,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
 
           <div className="modal-actions">
             {canGeneratePdf && <button className="btn btn-sm" onClick={() => setShowGenerate(true)}>Generate invoice PDF</button>}
-            {role === "administrator" && invoice.status === "overdue" && (
-              <button className="btn btn-sm btn-danger" onClick={() => { setShowWriteOff(true); setWriteOffError(""); }}>Write off</button>
-            )}
           </div>
           {locked && (
             <div className="locked-note">
@@ -505,40 +312,6 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
           )}
         </div>
       </div>
-      {showWriteOff && (
-        <div className="overlay active" onClick={(e) => { if (e.target === e.currentTarget) setShowWriteOff(false); }}>
-          <div className="modal" style={{ maxWidth: 440 }}>
-            <div className="modal-head">
-              <h3 style={{ margin: 0, fontSize: 15 }}>Write off {invoice.invoiceNumber}?</h3>
-              <button className="modal-close" onClick={() => setShowWriteOff(false)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 14, color: "var(--text-2)" }}>
-                This marks the invoice as written off and closes it. It is kept on the
-                record permanently and cannot be reopened by staff.
-              </div>
-              <div className="field" style={{ marginBottom: 12 }}>
-                <div className="fl">Reason (required)</div>
-                <input
-                  value={writeOffReason}
-                  onChange={(e) => setWriteOffReason(e.target.value)}
-                  placeholder="e.g. Winner unreachable, deal fell through"
-                  autoFocus
-                />
-              </div>
-              {writeOffError && (
-                <div style={{ fontSize: 12.5, color: "var(--red)", marginBottom: 12 }}>{writeOffError}</div>
-              )}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-danger" onClick={submitWriteOff} disabled={writeOffSaving}>
-                  {writeOffSaving ? "Writing off..." : "Write off invoice"}
-                </button>
-                <button className="btn btn-ghost" onClick={() => setShowWriteOff(false)} disabled={writeOffSaving}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {showGenerate && (
         <GeneratePdfModal
           invoices={[{ id: invoiceId, invoiceNumber: invoice.invoiceNumber, bidderName: invoice.bidderName, bidderNameAmharic: "", lots: invoice.lots }]}
@@ -546,13 +319,7 @@ export default function InvoiceDetailModal({ invoiceId, role, token, privileges,
           onClose={() => setShowGenerate(false)}
         />
       )}
-      {extractionPopover && (
-        <ExtractionPopover
-          extraction={extractionPopover.extraction}
-          amountPaid={extractionPopover.amountPaid}
-          onClose={() => setExtractionPopover(null)}
-        />
-      )}
     </div>
   );
 }
+

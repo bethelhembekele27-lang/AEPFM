@@ -577,3 +577,28 @@ class TokenActivity(models.Model):
     """
     token_key = models.CharField(max_length=40, unique=True)
     lastUsed = models.DateTimeField(default=timezone.now)
+
+
+class ServiceApiKey(models.Model):
+    """
+    A credential for a companion system (not a staff account) to call the
+    read-only export API. Only the SHA-256 hash is ever stored — the raw
+    key is shown exactly once, at creation time, and cannot be recovered.
+
+    Deliberately a separate trust boundary from staff tokens: it can be
+    revoked on its own without touching any human account, and a leak of
+    this key exposes only the read-only export, never a login.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    hashedKey = models.CharField(max_length=128, unique=True, editable=False)
+    isActive = models.BooleanField(default=True)
+    createdAt = models.DateTimeField(auto_now_add=True)
+    createdBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    lastUsedAt = models.DateTimeField(null=True, blank=True)
+    revokedAt = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.name} ({'active' if self.isActive else 'revoked'})"
+

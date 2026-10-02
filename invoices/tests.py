@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from unittest.mock import patch, MagicMock
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
@@ -599,3 +600,118 @@ class EndToEndInvoiceLifecycleTests(TestCase):
         self.assertNotEqual(invoice_2.status, 'paid')
         self.assertFalse(payment_2.autoReviewed)
         self.assertTrue(payment_2.verifyEtCheck.possibleDuplicate)
+
+
+@override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
+class ExportVerifiedWinnersTests(TestCase):
+    """
+    The companion-CRM export endpoint. The service key is the only auth
+    path, so these cover both halves: that a valid key gets exactly the
+    verified+paid set, and that no other credential gets through.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        from invoices.service_keys import generate_service_api_key
+        self.raw_key, self.key = generate_service_api_key('test-crm')
+
+    def auth(self, key=None):
+        return {'HTTP_AUTHORIZATION': f'Bearer {key or self.raw_key}'}
+
+    def make_verified_payment(self):
+        invoice = make_invoice(status='paid')
+        payment = Payment.objects.create(
+            invoice=invoice, amountPaid='1000.00', paymentMethod='bank_transfer',
+            paymentDate='2026-01-15', verificationStatus='manager_approved',
+            paymentStatus='verified', managerVerifiedDate=timezone.now(),
+        )
+        return invoice, payment
+
+    def test_missing_header_401(self):
+        res = self.client.get('/api/export/v1/verified-winners/')
+        self.assertEqual(res.status_code, 401)
+
+    def test_bad_key_401(self):
+        res = self.client.get('/api/export/v1/verified-winners/', **self.auth('wrong'))
+        self.assertEqual(res.status_code, 401)
+
+    def test_revoked_key_401(self):
+        self.key.isActive = False
+        self.key.save(update_fields=['isActive'])
+        res = self.client.get('/api/export/v1/verified-winners/', **self.auth())
+        self.assertEqual(res.status_code, 401)
+
+    def test_staff_token_is_not_accepted(self):
+        """A staff login must not work here — separate trust boundary."""
+        admin = make_user('exp_admin', 'Administrator', ['view_invoices', 'manage_users'])
+        token, _ = Token.objects.get_or_create(user=admin)
+        res = self.client.get('/api/export/v1/verified-winners/',
+                              HTTP_AUTHORIZATION=f'Token {token.key}')
+        self.assertEqual(res.status_code, 401)
+
+    def test_only_verified_paid_winners_included(self):
+        self.make_verified_payment()
+        pending = make_invoice(status='pending_payment')
+        Payment.objects.create(invoice=pending, amountPaid=500,
+                               paymentMethod='bank_transfer', paymentDate='2026-01-15')
+        res = self.client.get('/api/export/v1/verified-winners/', **self.auth())
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data['results']), 1)
+
+    def test_paid_but_unapproved_payment_excluded(self):
+        """Paid invoice with no approved Payment must not leak."""
+        invoice = make_invoice(status='paid')
+        Payment.objects.create(invoice=invoice, amountPaid=500,
+                               paymentMethod='bank_transfer', paymentDate='2026-01-15',
+                               verificationStatus='pending_manager_review')
+        res = self.client.get('/api/export/v1/verified-winners/', **self.auth())
+        self.assertEqual(len(res.data['results']), 0)
+
+    def test_pagination(self):
+        for _ in range(3):
+            self.make_verified_payment()
+        res = self.client.get('/api/export/v1/verified-winners/?limit=2', **self.auth())
+        self.assertEqual(len(res.data['results']), 2)
+        self.assertIsNotNone(res.data['nextCursor'])
+        res2 = self.client.get(
+            f'/api/export/v1/verified-winners/?limit=2&cursor={res.data["nextCursor"]}',
+            **self.auth())
+        self.assertEqual(len(res2.data['results']), 1)
+        self.assertIsNone(res2.data['nextCursor'])
+
+    def test_since_filters_out_earlier_entries(self):
+        invoice, payment = self.make_verified_payment()
+        payment.managerVerifiedDate = timezone.now() - timezone.timedelta(days=5)
+        payment.save(update_fields=['managerVerifiedDate'])
+        cutoff = (timezone.now() - timezone.timedelta(days=1)).isoformat()
+        res = self.client.get(f'/api/export/v1/verified-winners/?since={cutoff}', **self.auth())
+        self.assertEqual(len(res.data['results']), 0)
+
+    def test_amount_is_string(self):
+        self.make_verified_payment()
+        res = self.client.get('/api/export/v1/verified-winners/', **self.auth())
+        self.assertIsInstance(res.data['results'][0]['amountPaid'], str)
+
+    def test_bad_limit_and_cursor_return_400_not_500(self):
+        res = self.client.get('/api/export/v1/verified-winners/?limit=abc', **self.auth())
+        self.assertEqual(res.status_code, 400)
+        res = self.client.get('/api/export/v1/verified-winners/?cursor=%%%not-base64', **self.auth())
+        self.assertEqual(res.status_code, 400)
+        res = self.client.get('/api/export/v1/verified-winners/?since=not-a-date', **self.auth())
+        self.assertEqual(res.status_code, 400)
+
+    def test_lastUsedAt_updated(self):
+        self.make_verified_payment()
+        self.assertIsNone(self.key.lastUsedAt)
+        self.client.get('/api/export/v1/verified-winners/', **self.auth())
+        self.key.refresh_from_db()
+        self.assertIsNotNone(self.key.lastUsedAt)
+
+    def test_raw_key_is_never_stored(self):
+        from invoices.models import ServiceApiKey
+        import hashlib
+        self.assertNotIn(self.raw_key, ServiceApiKey.objects.get(pk=self.key.pk).hashedKey)
+        self.assertEqual(
+            hashlib.sha256(self.raw_key.encode()).hexdigest(),
+            self.key.hashedKey,
+        )

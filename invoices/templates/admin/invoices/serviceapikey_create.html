@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Create a new service API key</h1>
+<p>
+  The raw key is displayed exactly once, immediately after creation, and
+  cannot be recovered afterwards &mdash; only a SHA-256 hash is stored.
+  Copy it before leaving this page.
+</p>
+<form method="post">{% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit" class="default">Create key</button>
+</form>
+{% endblock %}

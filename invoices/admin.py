@@ -1,11 +1,18 @@
+from django import forms
 from django.contrib import admin
+from django.contrib import messages as admin_messages
 from django.db.models import Sum
+from django.shortcuts import redirect, render
+from django.urls import path
+from django.utils import timezone
 
 from .models import (
     StaffProfile, Auction, Winner, ImportBatch, FeeConfig,
     Invoice, InvoiceLot, Payment, Attachment, AuditLog,GeneratedReport,Role, SmsLog,
-    PaymentReceiptFile, SystemAuditLog,
+    PaymentReceiptFile, SystemAuditLog, ServiceApiKey,
 )
+
+from .service_keys import generate_service_api_key
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
@@ -164,3 +171,58 @@ class SystemAuditLogAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False
     def has_delete_permission(self, request, obj=None): return False
+
+
+class _CreateKeyForm(forms.Form):
+    name = forms.CharField(max_length=100)
+
+
+@admin.register(ServiceApiKey)
+class ServiceApiKeyAdmin(admin.ModelAdmin):
+    """
+    Keys for the companion CRM's read-only export. The raw key is never
+    stored, so it cannot be typed into a field or edited here — creation
+    goes through generate_service_api_key(), which returns the plaintext
+    exactly once, and the add button is disabled to stop anyone hashing a
+    key by hand and creating an unusable row.
+
+    Revoke rather than delete: lastUsedAt and the audit history stay
+    meaningful, and a deleted key can't be distinguished from one that
+    never existed.
+    """
+    list_display = ('name', 'isActive', 'createdAt', 'lastUsedAt', 'createdBy')
+    list_filter = ('isActive',)
+    search_fields = ('name',)
+    readonly_fields = ('hashedKey', 'createdAt', 'lastUsedAt', 'createdBy', 'revokedAt')
+    actions = ['revoke_keys']
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_urls(self):
+        # Prepended so this wins over the default catch-all admin URL.
+        return [
+            path('create-key/', self.admin_site.admin_view(self.create_key_view),
+                 name='invoices_serviceapikey_create'),
+        ] + super().get_urls()
+
+    def create_key_view(self, request):
+        if request.method == 'POST':
+            form = _CreateKeyForm(request.POST)
+            if form.is_valid():
+                raw, _ = generate_service_api_key(form.cleaned_data['name'], request.user)
+                admin_messages.success(
+                    request,
+                    f'Key created. COPY THIS NOW — it will never be shown again: {raw}',
+                )
+                return redirect('..')
+        else:
+            form = _CreateKeyForm()
+        return render(request, 'admin/invoices/serviceapikey_create.html',
+                      {'form': form, 'opts': self.model._meta})
+
+    def revoke_keys(self, request, queryset):
+        updated = queryset.filter(isActive=True).update(
+            isActive=False, revokedAt=timezone.now())
+        self.message_user(request, f'{updated} key(s) revoked.')
+    revoke_keys.short_description = 'Revoke selected keys'

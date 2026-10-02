@@ -7,6 +7,7 @@ from .views import (
     OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
     VerifyEtAutomationSettingsView,
 )
+from .export_views import VerifiedWinnersExportView
 from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView, VerifyEtRefreshView, ReceiptReprocessView
 
 from .import_views import (
@@ -43,5 +44,6 @@ urlpatterns = [
     path('receipts/<int:payment_id>/verify-transaction/refresh/', VerifyEtRefreshView.as_view(), name='receipt-verify-refresh'),
     path('receipts/<int:payment_id>/reprocess/', ReceiptReprocessView.as_view(), name='receipt-reprocess'),
 
+    path('export/v1/verified-winners/', VerifiedWinnersExportView.as_view(), name='export-verified-winners'),
     path('', include(router.urls)),
 ]
