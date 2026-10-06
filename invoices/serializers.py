@@ -273,7 +273,13 @@ class PublicInvoiceSerializer(InvoiceWinnerFieldsMixin, serializers.ModelSeriali
 def _login_result(user):
     """Same response shape for password login and Google login."""
     from rest_framework.authtoken.models import Token
+    from django.utils import timezone
+    from .models import TokenActivity
+
     token, _ = Token.objects.get_or_create(user=user)
+    TokenActivity.objects.update_or_create(
+        token_key=token.key, defaults={'lastUsed': timezone.now()}
+    )
     role_name_to_slug = {
         'Administrator': 'administrator',
         'Auction Manager': 'auction_manager',
