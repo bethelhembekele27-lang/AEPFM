@@ -55,7 +55,7 @@ def build_message(invoice, link, due_date):
     name = winner.bidderNameAmharic or winner.bidderName
     due = due_date.strftime('%d/%m/%Y')
     return (
-        f"ውድ {name}፣ የአክሽን ኢትዮጵያ የጨረታ processing fee ደረሰኝዎ ተዘጋጅቷል። "
+        f"ውድ {name}፣ የአክሽን ኢትዮጵያ የጨረታ ፕሮሰሲንግ ክፍያ ደረሰኝዎ ተዘጋጅቷል። "
         f"ደረሰኙን ለማየት እና የክፍያ ደረሰኝ ለመላክ፦ {link} "
         f"እባክዎ እስከ {due} ድረስ ይክፈሉ።"
     )

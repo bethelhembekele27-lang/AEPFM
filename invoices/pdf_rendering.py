@@ -94,7 +94,7 @@ def render_invoice_html(
         paragraph1 = (
             f"{auction_name} ለኩባንያው አገልግሎት የማያሰጡ የተለያዩ ዕቃዎችን በጨረታ አወዳድሮ ለመሸጥ ባወጣው የጨረታ ቁጥር {auction_ref_number} "
             f"ተሳትፈው በሎት ቁጥር {lot_numbers} የተጠቀሱትን ለመግዛት ባቀረቡት ጠቅላላ ዋጋ ቫትን ጨምሮ ብር {total_amount:,.2f}{amount_words_part} ሲሆን "
-            f"የንብረቶቹን ርክክብ መመሪያ ተመልክተው ከተረከቡ በኋላ ከአሸነፉበት ዋጋ ላይ የሚታሰብ {fee_percentage}% (processing fee) {total_fee:,.2f}{fee_words_part} "
+            f"የንብረቶቹን ርክክብ መመሪያ ተመልክተው ከተረከቡ በኋላ ከአሸነፉበት ዋጋ ላይ የሚታሰብ {fee_percentage}% (ፕሮሰሲንግ ክፍያ) {total_fee:,.2f}{fee_words_part} "
             f"ለአክሽን ኢትዮጵያ የሚከፍሉ ይሆናል፡፡"
         )
 
@@ -146,10 +146,10 @@ def render_invoice_html(
             <div>ለ {display_name}</div>
             <div>ባሉበት</div>
         </div>
-        <div class="subject">ጉዳይ፡- የጨረታ processing fee እንዲከፍሉ ስለማሳወቅ</div>
+        <div class="subject">ጉዳይ፡- የጨረታ ፕሮሰሲንግ ክፍያ እንዲከፍሉ ስለማሳወቅ</div>
         <div class="body-text">{paragraph1}</div>
         <div class="body-text">{paragraph2}</div>
-        <div class="body-text">ማሳሰቢያ፡- ለጨረታ መወዳደሪያ ያስያዙት ሲ.ፒ.ኦ ተመላሽ የሚደረገው processing fee መከፈላችሁ ከተረጋገጠ በኋላ ነው፡፡</div>
+        <div class="body-text">ማሳሰቢያ፡- ለጨረታ መወዳደሪያ ያስያዙት ሲ.ፒ.ኦ ተመላሽ የሚደረገው ፕሮሰሲንግ ክፍያ መከፈላችሁ ከተረጋገጠ በኋላ ነው፡፡</div>
         <div class="closing">ከሰላምታ ጋር</div>
         <div class="stamp-sig-row">
             <img class="stamp-img" src="data:image/png;base64,{images['stamp']}">
