@@ -16,7 +16,12 @@ def _headers():
 
 def _build_result(payload, settlement_account):
     items = payload.get('data') or []
-    first = items[0] if items else {}
+    if isinstance(items, dict):
+        first = items
+    elif isinstance(items, list) and items:
+        first = items[0]
+    else:
+        first = {}
     settlement = first.get('settlementAccountMatch') or {}
     return {
         'bank': 'cbe',
@@ -97,7 +102,11 @@ def fetch_status(status_url, settlement_account=None):
     except (requests.RequestException, ValueError) as exc:
         return None, f'Could not refresh the Verify.ET check: {exc}'
     if res.status_code == 200 and payload.get('data'):
-        return _build_result(payload, settlement_account), None
+        try:
+            return _build_result(payload, settlement_account), None
+        except Exception as exc:
+            logger.exception('Unexpected Verify.ET status payload')
+            return None, f'Verify.ET returned an unexpected response: {exc}'
     v = payload.get('verification') or {}
     state = v.get('processingStatus', 'queued')
     if res.status_code in (200, 202):
