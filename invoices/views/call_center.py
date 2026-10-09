@@ -3,9 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status as http_status
 
-from .models import Invoice
-from .permissions import has_permission
-from .audit import log_audit
+from invoices.models import Invoice
+from invoices.permissions import has_permission
+from invoices.audit import log_audit
 
 UNPAID_STATUSES = ['invoice_generated', 'pending_payment', 'payment_submitted', 'under_verification', 'overdue']
 

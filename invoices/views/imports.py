@@ -15,11 +15,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ImportBatch, Winner, Invoice, InvoiceLot, FeeConfig
-from .serializers import ImportBatchSerializer, InvoiceListSerializer
-from .permissions import has_permission
+from invoices.models import ImportBatch, Winner, Invoice, InvoiceLot, FeeConfig
+from invoices.serializers import ImportBatchSerializer, InvoiceListSerializer
+from invoices.permissions import has_permission
 
-from .pagination import StandardPagination
+from invoices.pagination import StandardPagination
 
 
 # ---------------------------------------------------------------------------

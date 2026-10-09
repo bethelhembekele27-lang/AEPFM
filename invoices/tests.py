@@ -528,7 +528,7 @@ class EndToEndInvoiceLifecycleTests(TestCase):
         fake_receipt = SimpleUploadedFile('receipt.jpg', b'\xff\xd8\xff' + (b'0' * 25000),
                                           content_type='image/jpeg')
         # Mock extraction to return the reference number
-        with patch('invoices.public_views._validate_receipt_file', return_value=None), \
+        with patch('invoices.views.public._validate_receipt_file', return_value=None), \
              patch('invoices.services.verify_et_automation.check_transaction',
                    return_value=(verify_result, None)), \
              patch('invoices.services.verify_et_automation._get_or_extract',

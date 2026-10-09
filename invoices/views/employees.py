@@ -7,11 +7,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status as http_status
 
-from .models import StaffProfile, Role
-from .serializers import EmployeeSerializer, RoleSerializer
-from .permissions import has_permission
-from .privileges import PRIVILEGE_CATALOG, PRIVILEGE_KEYS
-from .audit import log_system_audit
+from invoices.models import StaffProfile, Role
+from invoices.serializers import EmployeeSerializer, RoleSerializer
+from invoices.permissions import has_permission
+from invoices.privileges import PRIVILEGE_CATALOG, PRIVILEGE_KEYS
+from invoices.audit import log_system_audit
 
 
 def _clean_email(raw, exclude_user_id=None):

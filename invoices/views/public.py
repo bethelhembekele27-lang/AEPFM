@@ -13,12 +13,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework import status as http_status
 
-from .models import Invoice, Payment, PaymentReceiptFile
-from .serializers import PublicInvoiceSerializer
-from .audit import log_audit
-from .services.pdf_rendering import load_invoice_images, render_invoice_html
-from .services.payment_amounts import amount_due
-from .services.verify_et_automation import dispatch_receipt_processing
+from invoices.models import Invoice, Payment, PaymentReceiptFile
+from invoices.serializers import PublicInvoiceSerializer
+from invoices.audit import log_audit
+from invoices.services.pdf_rendering import load_invoice_images, render_invoice_html
+from invoices.services.payment_amounts import amount_due
+from invoices.services.verify_et_automation import dispatch_receipt_processing
 
 logger = logging.getLogger(__name__)
 

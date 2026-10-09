@@ -1,14 +1,14 @@
 """
 Shared invoice-letter PDF rendering — used by BOTH the authenticated
-"Generate invoice PDF" button (InvoiceViewSet.generate_pdf in views.py)
+"Generate invoice PDF" button (InvoiceViewSet.generate_pdf in views/invoices.py)
 and the public, token-gated PDF endpoint (PublicInvoicePdfView in
-public_views.py). Extracted here so there is exactly ONE template to
+views/public.py). Extracted here so there is exactly ONE template to
 maintain — if the letter wording/layout changes, both paths update
 automatically.
 
 This is a straight extraction of the html-building logic that used to
 live as InvoiceViewSet._render_invoice_html — same signature, same
-output. views.py's generate_pdf action should be updated to import and
+output. views/invoices.py's generate_pdf action should be updated to import and
 call render_invoice_html(...) from here instead of calling
 self._render_invoice_html(...), and its own copy of the method can be
 deleted once that's done.

@@ -1,5 +1,5 @@
 from django.urls import path
-from .public_views import PublicInvoiceView, PublicInvoicePdfView, PublicReceiptUploadView
+from invoices.views.public import PublicInvoiceView, PublicInvoicePdfView, PublicReceiptUploadView
 
 urlpatterns = [
     path('public/invoice/<uuid:token>/', PublicInvoiceView.as_view(), name='public-invoice-detail'),

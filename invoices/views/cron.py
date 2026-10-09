@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status as http_status
-from .models import Invoice, AuditLog
+from invoices.models import Invoice, AuditLog
 
 
 class FlagOverdueView(APIView):

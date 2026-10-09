@@ -9,10 +9,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .audit import log_audit
-from .models import Invoice, SmsLog
-from .permissions import has_permission
-from .services.sms import build_message, normalize_phone, public_link, send_sms
+from invoices.audit import log_audit
+from invoices.models import Invoice, SmsLog
+from invoices.permissions import has_permission
+from invoices.services.sms import build_message, normalize_phone, public_link, send_sms
 
 MIN_DAYS = 1
 MAX_DAYS = 90

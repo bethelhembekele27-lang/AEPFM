@@ -22,8 +22,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
-from .audit import log_system_audit
-from .models import Payment, ServiceApiKey
+from invoices.audit import log_system_audit
+from invoices.models import Payment, ServiceApiKey
 
 MAX_LIMIT = 100
 

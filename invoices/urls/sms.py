@@ -1,5 +1,5 @@
 from django.urls import path
-from .sms_views import SmsPreviewView, SmsSendView, BulkSmsSendView
+from invoices.views.sms import SmsPreviewView, SmsSendView, BulkSmsSendView
 
 urlpatterns = [
     path('invoices/<int:invoice_id>/sms/preview/', SmsPreviewView.as_view(), name='sms-preview'),

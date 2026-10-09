@@ -1,16 +1,16 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import (
+from invoices.views.invoices import (
     AuctionViewSet, WinnerViewSet, InvoiceViewSet,
     AttachmentDeleteView, PaymentDeleteView, AuditLogListView, AuditLogClearView, AuditLogFilterOptionsView, FeeConfigView, LoginView,
     OfficeSettingsView, ManualWinnerCreateView, GoogleLoginView,
     VerifyEtAutomationSettingsView,
 )
-from .export_views import VerifiedWinnersExportView
-from .manager_review_views import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView, VerifyEtRefreshView, ReceiptReprocessView
+from invoices.views.export import VerifiedWinnersExportView
+from invoices.views.receipts import PendingReceiptsView, ReceiptReviewView, ReceiptExtractView, VerifyEtCheckView, VerifyEtRefreshView, ReceiptReprocessView
 
-from .import_views import (
+from invoices.views.imports import (
     ImportBatchViewSet, ImportBatchPreviewView, ImportBatchConfirmView,
 )
 

@@ -8,27 +8,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
-from .pagination import StandardPagination
+from invoices.pagination import StandardPagination
 from io import BytesIO
 from decimal import Decimal
 
-from .audit import log_audit
-from .services.pdf_rendering import load_invoice_images, render_invoice_html
+from invoices.audit import log_audit
+from invoices.services.pdf_rendering import load_invoice_images, render_invoice_html
 import base64
 import os
 from django.conf import settings
 
-from .models import (
+from invoices.models import (
     Auction, Winner, Invoice, InvoiceLot, Payment, Attachment, FeeConfig, AuditLog,OfficeSettings,
     VerifyEtAutomationSettings,
 )
-from .serializers import (
+from invoices.serializers import (
     AuctionSerializer, WinnerSerializer, InvoiceListSerializer,
     InvoiceDetailSerializer, PaymentSerializer, AttachmentSerializer,
     AuditLogSerializer, FeeConfigSerializer, LoginSerializer, GoogleLoginSerializer,
     _login_result, OfficeSettingsSerializer, VerifyEtAutomationSettingsSerializer,
 )
-from .permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
+from invoices.permissions import ReadOnlyForViewer, ActionPermissionMap, can_transition, has_permission
 
 from datetime import datetime, timedelta, date
 
@@ -346,7 +346,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if not has_permission(request.user, 'upload_payment_proof'):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
-        from .services.upload_validation import validate_staff_upload
+        from invoices.services.upload_validation import validate_staff_upload
         err = validate_staff_upload(request.FILES.get('filePath'))
         if err:
             return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)

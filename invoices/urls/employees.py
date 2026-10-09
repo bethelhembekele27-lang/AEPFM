@@ -1,5 +1,5 @@
 from django.urls import path
-from .employee_views import (
+from invoices.views.employees import (
     PrivilegeCatalogView, RoleListCreateView, RoleDeleteView,
     EmployeeListCreateView, EmployeePrivilegesView, EmployeeDeactivateView,
     EmployeeBulkDeactivateView, EmployeeBulkActivateView, EmployeeBulkDeleteView, EmployeeResetPasswordView,

@@ -7,9 +7,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status as http_status
 
-from .models import GeneratedReport
-from .report_queries import run_report
-from .permissions import has_permission
+from invoices.models import GeneratedReport
+from invoices.services.report_queries import run_report
+from invoices.permissions import has_permission
 
 REPORT_TITLES = {
     'outstanding': 'Outstanding processing fees', 'daily': 'Daily collections',
@@ -209,7 +209,7 @@ class FilterOptionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from .models import Winner, ImportBatch, Invoice
+        from invoices.models import Winner, ImportBatch, Invoice
 
         companies = (
             Winner.objects.filter(invoices__isnull=False)

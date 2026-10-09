@@ -20,7 +20,7 @@ from decimal import Decimal
 from django.db.models import Sum, Count, F
 from django.utils import timezone
 
-from .models import Invoice, InvoiceLot, Payment, Auction, Winner
+from invoices.models import Invoice, InvoiceLot, Payment, Auction, Winner
 
 OUTSTANDING_STATUSES = ['invoice_generated', 'pending_payment', 'payment_submitted', 'under_verification', 'overdue']
 
