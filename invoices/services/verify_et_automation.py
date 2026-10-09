@@ -8,8 +8,8 @@ from django.conf import settings
 from django.db import close_old_connections, transaction
 from django.utils import timezone
 
-from .audit import log_audit
-from .models import Payment, VerifyEtAutomationSettings, VerifyEtCheck, Invoice
+from ..audit import log_audit
+from ..models import Payment, VerifyEtAutomationSettings, VerifyEtCheck, Invoice
 from .payment_amounts import refresh_discrepancy
 from .sms import build_rejection_message, normalize_phone, send_sms
 from .verify_et import check_transaction, fetch_status

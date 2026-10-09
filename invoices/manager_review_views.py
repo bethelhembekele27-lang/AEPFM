@@ -11,10 +11,10 @@ from rest_framework.throttling import UserRateThrottle
 from .models import Payment, VerifyEtCheck
 from .permissions import has_permission
 from .audit import log_audit
-from .sms import send_sms, normalize_phone, public_link
-from .payment_amounts import refresh_discrepancy
-from .verify_et_automation import persist_check
-from .sms import build_rejection_message
+from .services.sms import send_sms, normalize_phone, public_link
+from .services.payment_amounts import refresh_discrepancy
+from .services.verify_et_automation import persist_check
+from .services.sms import build_rejection_message
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class ReceiptReviewView(APIView):
                     wrong_account=bool(check and check.settlementMatched is False)))
 
         if decision == 'approve' and settings.GEMINI_API_KEY:
-            from .receipt_extraction import run_and_save_extraction
+            from .services.receipt_extraction import run_and_save_extraction
             try:
                 run_and_save_extraction(payment, request.user)
             except Exception:
@@ -224,7 +224,7 @@ class ReceiptExtractView(APIView):
         if not payment.receiptFile:
             return Response({'error': 'This payment has no receipt file.'}, status=http_status.HTTP_400_BAD_REQUEST)
 
-        from .receipt_extraction import run_and_save_extraction
+        from .services.receipt_extraction import run_and_save_extraction
         extraction, error = run_and_save_extraction(payment, request.user)
         if error:
             return Response({'error': error}, status=http_status.HTTP_502_BAD_GATEWAY)
@@ -250,7 +250,7 @@ class VerifyEtCheckView(APIView):
         suffix = (request.data.get('accountSuffix') or '').strip() or settings.VERIFY_ET_CBE_SUFFIX
         if not reference:
             return Response({'error': 'A reference number is required.'}, status=400)
-        from .verify_et import check_transaction
+        from .services.verify_et import check_transaction
         result, error = check_transaction(reference, suffix, settings.VERIFY_ET_SETTLEMENT_ACCOUNTS.get('cbe'))
         if error:
             return Response({'error': error}, status=502)
@@ -278,7 +278,7 @@ class VerifyEtRefreshView(APIView):
         url = (check.rawResponse or {}).get('statusUrl')
         if not url:
             return Response({'error': 'No pending check to refresh.'}, status=400)
-        from .verify_et import fetch_status
+        from .services.verify_et import fetch_status
         result, error = fetch_status(url, settings.VERIFY_ET_SETTLEMENT_ACCOUNTS.get('cbe'))
         if error:
             return Response({'error': error}, status=502)
@@ -300,7 +300,7 @@ class ReceiptReprocessView(APIView):
             return Response({'error': 'Payment not found'}, status=404)
         if payment.verificationStatus != 'pending_manager_review':
             return Response({'error': 'Only receipts still pending review can be re-processed.'}, status=400)
-        from .verify_et_automation import process_new_receipt, _set_note
+        from .services.verify_et_automation import process_new_receipt, _set_note
         try:
             process_new_receipt(payment)
         except Exception as exc:

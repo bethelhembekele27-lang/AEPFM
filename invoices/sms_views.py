@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from .audit import log_audit
 from .models import Invoice, SmsLog
 from .permissions import has_permission
-from .sms import build_message, normalize_phone, public_link, send_sms
+from .services.sms import build_message, normalize_phone, public_link, send_sms
 
 MIN_DAYS = 1
 MAX_DAYS = 90

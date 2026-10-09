@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from django.db.models import Sum
-from .models import Payment
+from ..models import Payment
 
 TOLERANCE = Decimal('1.00')
 

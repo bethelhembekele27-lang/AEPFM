@@ -13,7 +13,7 @@ from io import BytesIO
 from decimal import Decimal
 
 from .audit import log_audit
-from .pdf_rendering import load_invoice_images, render_invoice_html
+from .services.pdf_rendering import load_invoice_images, render_invoice_html
 import base64
 import os
 from django.conf import settings
@@ -346,7 +346,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if not has_permission(request.user, 'upload_payment_proof'):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
-        from .upload_validation import validate_staff_upload
+        from .services.upload_validation import validate_staff_upload
         err = validate_staff_upload(request.FILES.get('filePath'))
         if err:
             return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)

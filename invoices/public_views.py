@@ -16,9 +16,9 @@ from rest_framework import status as http_status
 from .models import Invoice, Payment, PaymentReceiptFile
 from .serializers import PublicInvoiceSerializer
 from .audit import log_audit
-from .pdf_rendering import load_invoice_images, render_invoice_html
-from .payment_amounts import amount_due
-from .verify_et_automation import dispatch_receipt_processing
+from .services.pdf_rendering import load_invoice_images, render_invoice_html
+from .services.payment_amounts import amount_due
+from .services.verify_et_automation import dispatch_receipt_processing
 
 logger = logging.getLogger(__name__)
 

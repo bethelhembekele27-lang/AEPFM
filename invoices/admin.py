@@ -12,7 +12,7 @@ from .models import (
     PaymentReceiptFile, SystemAuditLog, ServiceApiKey,
 )
 
-from .service_keys import generate_service_api_key
+from .services.service_keys import generate_service_api_key
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):

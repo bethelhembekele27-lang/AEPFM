@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from invoices.service_keys import generate_service_api_key
+from invoices.services.service_keys import generate_service_api_key
 
 
 class Command(BaseCommand):

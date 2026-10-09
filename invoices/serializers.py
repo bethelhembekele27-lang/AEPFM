@@ -530,7 +530,7 @@ class ManagerPaymentSerializer(PaymentSerializer):
         return urls + [absolute(x.file) for x in obj.receipt_files.all()]
 
     def get_amountDue(self, obj):
-        from .payment_amounts import remaining_due
+        from .services.payment_amounts import remaining_due
         return str(remaining_due(obj.invoice, exclude_payment_id=obj.id))
 
     def get_managerVerifiedBy(self, obj):

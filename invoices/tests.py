@@ -229,7 +229,7 @@ class VerifyEtCheckTests(TestCase):
 
     def mock_provider(self, result=None, error=None):
         """Patch check_transaction to return (result, error) — no network."""
-        return patch('invoices.verify_et.check_transaction', return_value=(result, error))
+        return patch('invoices.services.verify_et.check_transaction', return_value=(result, error))
 
     def auth(self, user):
         token, _ = Token.objects.get_or_create(user=user)
@@ -366,48 +366,48 @@ class EthiopianCalendarTests(TestCase):
     """
 
     def test_new_year_anchor_leap_case(self):
-        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        from invoices.services.ethiopian_calendar import ethiopian_to_gregorian
         self.assertEqual(ethiopian_to_gregorian(2016, 1, 1).isoformat(), '2023-09-12')
 
     def test_new_year_anchor_non_leap_case(self):
-        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        from invoices.services.ethiopian_calendar import ethiopian_to_gregorian
         self.assertEqual(ethiopian_to_gregorian(2018, 1, 1).isoformat(), '2025-09-11')
 
     def test_pagume_day_range_enforced(self):
-        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        from invoices.services.ethiopian_calendar import ethiopian_to_gregorian
         with self.assertRaises(ValueError):
             ethiopian_to_gregorian(2016, 13, 7)
 
     def test_month_13_day_6_is_valid(self):
-        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        from invoices.services.ethiopian_calendar import ethiopian_to_gregorian
         self.assertTrue(ethiopian_to_gregorian(2016, 13, 6).isoformat())
 
     def test_day_31_rejected(self):
-        from invoices.ethiopian_calendar import ethiopian_to_gregorian
+        from invoices.services.ethiopian_calendar import ethiopian_to_gregorian
         with self.assertRaises(ValueError):
             ethiopian_to_gregorian(2016, 1, 31)
 
     def test_parse_and_convert_valid_slash_date(self):
-        from invoices.ethiopian_calendar import parse_and_convert
+        from invoices.services.ethiopian_calendar import parse_and_convert
         self.assertTrue(parse_and_convert('16/12/2016').startswith('20'))
 
     def test_parse_and_convert_declines_modern_looking_year(self):
         """2020s is implausible as an Ethiopian year, so we decline."""
-        from invoices.ethiopian_calendar import parse_and_convert
+        from invoices.services.ethiopian_calendar import parse_and_convert
         self.assertIsNone(parse_and_convert('16/12/2026'))
 
     def test_parse_and_convert_short_year_normalized(self):
-        from invoices.ethiopian_calendar import parse_and_convert
+        from invoices.services.ethiopian_calendar import parse_and_convert
         self.assertEqual(parse_and_convert('16/12/16'), parse_and_convert('16/12/2016'))
 
     def test_parse_and_convert_rejects_unparseable_text(self):
-        from invoices.ethiopian_calendar import parse_and_convert
+        from invoices.services.ethiopian_calendar import parse_and_convert
         self.assertIsNone(parse_and_convert('Sep 25, 2026, 10:00 AM'))
         self.assertIsNone(parse_and_convert(''))
         self.assertIsNone(parse_and_convert(None))
 
     def test_parse_and_convert_tolerates_calendar_suffix(self):
-        from invoices.ethiopian_calendar import parse_and_convert
+        from invoices.services.ethiopian_calendar import parse_and_convert
         self.assertEqual(parse_and_convert('16/12/2016'), parse_and_convert('16/12/2016 ዓ.ም'))
         self.assertEqual(parse_and_convert('16/12/2016'), parse_and_convert('16/12/2016 E.C.'))
 
@@ -431,11 +431,11 @@ class VerifyEtAutomationTests(TestCase):
         r.update(kw); return r
 
     def run_it(self, result, payment=None, ref='FT1', bank='cbe'):
-        from invoices.verify_et_automation import process_new_receipt
+        from invoices.services.verify_et_automation import process_new_receipt
         payment = payment or self.payment
-        with patch('invoices.verify_et_automation._get_or_extract', return_value=(ref, bank)), \
-             patch('invoices.verify_et_automation.check_transaction', return_value=(result, None)) as m, \
-             patch('invoices.verify_et_automation.send_sms') as sms:
+        with patch('invoices.services.verify_et_automation._get_or_extract', return_value=(ref, bank)), \
+             patch('invoices.services.verify_et_automation.check_transaction', return_value=(result, None)) as m, \
+             patch('invoices.services.verify_et_automation.send_sms') as sms:
             process_new_receipt(payment)
         payment.refresh_from_db(); payment.invoice.refresh_from_db()
         return m, sms
@@ -529,11 +529,11 @@ class EndToEndInvoiceLifecycleTests(TestCase):
                                           content_type='image/jpeg')
         # Mock extraction to return the reference number
         with patch('invoices.public_views._validate_receipt_file', return_value=None), \
-             patch('invoices.verify_et_automation.check_transaction',
+             patch('invoices.services.verify_et_automation.check_transaction',
                    return_value=(verify_result, None)), \
-             patch('invoices.verify_et_automation._get_or_extract',
+             patch('invoices.services.verify_et_automation._get_or_extract',
                    return_value=(reference, 'cbe')), \
-             patch('invoices.verify_et_automation._set_note'):
+             patch('invoices.services.verify_et_automation._set_note'):
             res = self.client.post(
                 f'/api/public/invoice/{invoice.publicToken}/receipt/',
                 {'receiptFiles': fake_receipt},
@@ -612,7 +612,7 @@ class ExportVerifiedWinnersTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        from invoices.service_keys import generate_service_api_key
+        from invoices.services.service_keys import generate_service_api_key
         self.raw_key, self.key = generate_service_api_key('test-crm')
 
     def auth(self, key=None):

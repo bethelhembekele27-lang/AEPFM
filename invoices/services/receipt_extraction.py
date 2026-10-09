@@ -82,7 +82,7 @@ def _num(value):
 
 def run_and_save_extraction(payment, user):
     """Returns (extraction, None) or (None, error_string)."""
-    from .models import ReceiptExtraction
+    from ..models import ReceiptExtraction
     from .sms import normalize_phone
     from .ethiopian_calendar import parse_and_convert
 

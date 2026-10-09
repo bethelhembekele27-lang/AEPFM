@@ -9,7 +9,7 @@ Django admin share one implementation and can't drift apart.
 import hashlib
 import secrets
 
-from .models import ServiceApiKey
+from ..models import ServiceApiKey
 
 
 def generate_service_api_key(name, user=None):
