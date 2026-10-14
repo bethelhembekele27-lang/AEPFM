@@ -89,10 +89,6 @@ function SingleInvoiceForm({ invoice, onConfirm, onClose }) {
   }
 
   function handleConfirm() {
-    if (!amhName.trim()) {
-      window.alert("Enter the bidder name in Amharic before generating.");
-      return;
-    }
     onConfirm({
       percentagesByInvId: { [invoice.id]: pct || "0.95" },
       auctionRefNumber,
@@ -134,7 +130,7 @@ function SingleInvoiceForm({ invoice, onConfirm, onClose }) {
           <div className="fv">{invoice.bidderName}</div>
         </div>
         <div className="field">
-          <div className="fl">Bidder name (Amharic) *</div>
+          <div className="fl">Bidder name (Amharic) — optional</div>
           <input type="text" value={amhName} onChange={(e) => setAmhName(e.target.value)} placeholder="የተጫራች ስም" />
         </div>
 
@@ -248,11 +244,6 @@ function BulkForm({ invoices, onConfirm, onClose }) {
   function setAmhName(invId, value) { setAmhNames((p) => ({ ...p, [invId]: value })); }
 
   function handleConfirm() {
-    const missingName = invoices.some((inv) => !(amhNames[inv.id] || "").trim());
-    if (missingName) {
-      window.alert("Enter the bidder name in Amharic for every invoice before generating.");
-      return;
-    }
     const percentagesByInvId = {};
     invoices.forEach((inv) => { percentagesByInvId[inv.id] = pcts[inv.id] || '0.95'; });
     onConfirm({ percentagesByInvId, auctionRefNumber, amhNames, amountWordsByInv: {}, feeWordsByInv: {}, officeAddress: '' });
@@ -306,7 +297,7 @@ export default function GeneratePdfModal({ invoices, onConfirm, onClose }) {
           <div>
             <h2 style={{ margin: 0 }}>Generate invoice PDF{single ? "" : "s"}</h2>
             <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 2 }}>
-              Set the processing fee percentage {single ? "and Amharic name for this invoice" : "for each invoice"} before generating.
+              Set the processing fee percentage {single ? "and optionally the Amharic name for this invoice" : "for each invoice"} before generating.
             </div>
           </div>
           <button className="modal-close" onClick={onClose}>&times;</button>
