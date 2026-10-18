@@ -38,7 +38,7 @@ def extract_receipt_data(image_bytes, mime_type):
         model = genai.GenerativeModel(settings.GEMINI_MODEL)
         response = model.generate_content(
             [EXTRACTION_PROMPT, {'mime_type': mime_type, 'data': image_bytes}],
-            request_options={'timeout': 45},
+            request_options={'timeout': 60},
         )
         text = (response.text or '').strip()
         if text.startswith('```'):
