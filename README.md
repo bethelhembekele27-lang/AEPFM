@@ -79,3 +79,7 @@ From your PC run:
 ## Companion project
 
 A separate Call Center CRM (hosted on Render) pulls verified winners through the export API using a service API key created in the admin site.
+## how to update vps back end
+ssh aepfm@68.183.216.61
+cd ~/AEPFM
+bash deploy.sh
