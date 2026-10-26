@@ -57,6 +57,7 @@ export default function Login({ onLogin }) {
     if (rememberMe) {
       localStorage.setItem('authToken', data.token);
       localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role, privileges: data.privileges }));
+      localStorage.setItem('authLoginTime', Date.now().toString());
     }
     onLogin(data.role, data.username, data.token, rememberMe, data.privileges);
   }

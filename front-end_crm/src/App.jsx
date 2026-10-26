@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { canAccessPage, getDefaultPage } from "./data";
 import "./styles.css";
 import Login from "./components/Login";
@@ -23,6 +23,17 @@ export default function App() {
     const sessionToken = sessionStorage.getItem("authToken");
     const localToken = localStorage.getItem("authToken");
     const localUser = localStorage.getItem("authUser");
+    const loginTime = localStorage.getItem("authLoginTime");
+
+    // Check if session has expired (6 hours = 21600000 ms)
+    const SESSION_EXPIRY_MS = 6 * 60 * 60 * 1000;
+    if (loginTime && Date.now() - parseInt(loginTime) > SESSION_EXPIRY_MS) {
+      // Session expired, clear localStorage
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("authUser");
+      localStorage.removeItem("authLoginTime");
+      return null;
+    }
 
     // sessionStorage always wins — it reflects the most recent login in
     // this tab. localStorage is only a fallback for "remember me" across
@@ -70,24 +81,54 @@ useEffect(() => {
   const [detailInvoiceId, setDetailInvoiceId] = useState(null);
   const [smsInvoiceId, setSmsInvoiceId] = useState(null);
 
+  // Check session expiration periodically
+  useEffect(() => {
+    if (!session) return;
+
+    const SESSION_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+    const loginTime = localStorage.getItem("authLoginTime");
+
+    if (!loginTime) return;
+
+    const checkExpiration = () => {
+      if (Date.now() - parseInt(loginTime) > SESSION_EXPIRY_MS) {
+        handleLogout();
+      }
+    };
+
+    // Check immediately
+    checkExpiration();
+
+    // Check every minute
+    const interval = setInterval(checkExpiration, 60000);
+
+    return () => clearInterval(interval);
+  }, [session, handleLogout]);
+
   useEffect(() => {
     if (session && !canAccessPage(page, session.privileges)) {
       setPage(getDefaultPage(session.privileges));
     }
   }, [session]);
 
-  function handleLogout() {
+  const handleLogout = useCallback(() => {
     sessionStorage.removeItem("authToken");
     localStorage.removeItem("authToken");
     localStorage.removeItem("authUser");
+    localStorage.removeItem("authLoginTime");
 
     setSession(null);
     setPage("dashboard");
     setDetailInvoiceId(null);
-  }
+  }, []);
 
   function handleLogin(role, username, token, remember, privileges) {
     sessionStorage.setItem("authToken", token);
+    if (remember) {
+      localStorage.setItem("authToken", token);
+      localStorage.setItem("authUser", JSON.stringify({ username, role, privileges: privileges || [] }));
+      localStorage.setItem("authLoginTime", Date.now().toString());
+    }
     setSession({ role, username, token, privileges: privileges || [] });
     setPage(getDefaultPage(privileges || []));
   }
