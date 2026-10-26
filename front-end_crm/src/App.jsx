@@ -81,6 +81,17 @@ useEffect(() => {
   const [detailInvoiceId, setDetailInvoiceId] = useState(null);
   const [smsInvoiceId, setSmsInvoiceId] = useState(null);
 
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem("authToken");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("authUser");
+    localStorage.removeItem("authLoginTime");
+
+    setSession(null);
+    setPage("dashboard");
+    setDetailInvoiceId(null);
+  }, []);
+
   // Check session expiration periodically
   useEffect(() => {
     if (!session) return;
@@ -110,17 +121,6 @@ useEffect(() => {
       setPage(getDefaultPage(session.privileges));
     }
   }, [session]);
-
-  const handleLogout = useCallback(() => {
-    sessionStorage.removeItem("authToken");
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("authUser");
-    localStorage.removeItem("authLoginTime");
-
-    setSession(null);
-    setPage("dashboard");
-    setDetailInvoiceId(null);
-  }, []);
 
   function handleLogin(role, username, token, remember, privileges) {
     sessionStorage.setItem("authToken", token);
