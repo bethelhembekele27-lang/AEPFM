@@ -124,11 +124,9 @@ useEffect(() => {
 
   function handleLogin(role, username, token, remember, privileges) {
     sessionStorage.setItem("authToken", token);
-    if (remember) {
-      localStorage.setItem("authToken", token);
-      localStorage.setItem("authUser", JSON.stringify({ username, role, privileges: privileges || [] }));
-      localStorage.setItem("authLoginTime", Date.now().toString());
-    }
+    localStorage.setItem("authToken", token);
+    localStorage.setItem("authUser", JSON.stringify({ username, role, privileges: privileges || [] }));
+    localStorage.setItem("authLoginTime", Date.now().toString());
     setSession({ role, username, token, privileges: privileges || [] });
     setPage(getDefaultPage(privileges || []));
   }

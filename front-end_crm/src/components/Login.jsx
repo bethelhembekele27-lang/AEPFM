@@ -44,22 +44,16 @@ export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
   const googleButtonRef = useRef(null);
-  const rememberRef = useRef(false);
 
-  useEffect(() => { rememberRef.current = remember; }, [remember]);
-
-  function completeLogin(data, rememberMe) {
+  function completeLogin(data) {
     sessionStorage.setItem('authToken', data.token);
-    if (rememberMe) {
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role, privileges: data.privileges }));
-      localStorage.setItem('authLoginTime', Date.now().toString());
-    }
-    onLogin(data.role, data.username, data.token, rememberMe, data.privileges);
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('authUser', JSON.stringify({ username: data.username, role: data.role, privileges: data.privileges }));
+    localStorage.setItem('authLoginTime', Date.now().toString());
+    onLogin(data.role, data.username, data.token, true, data.privileges);
   }
 
   async function handleGoogleCredential(response) {
@@ -76,7 +70,7 @@ export default function Login({ onLogin }) {
         setError(data.error || "Google sign-in failed.");
         return;
       }
-      completeLogin(data, rememberRef.current);
+      completeLogin(data);
     } catch (err) {
       setError("Network error. Please try again.");
       console.error(err);
@@ -135,7 +129,7 @@ export default function Login({ onLogin }) {
       }
 
       const data = await response.json();
-      completeLogin(data, remember);
+      completeLogin(data);
     } catch (err) {
       setError("Network error. Please try again.");
     }
@@ -172,11 +166,6 @@ export default function Login({ onLogin }) {
           />
           <EyeToggleButton show={showPassword} onToggle={() => setShowPassword((s) => !s)} />
         </div>
-
-        <label className="remember-row">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          Remember me on this device
-        </label>
 
         {error && <div className="login-error">{error}</div>}
 
